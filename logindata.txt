@@ -1,0 +1,9 @@
+Receptionist: reception@doclink.com
+Planning Officer: planning@doclink.com
+Committee Member: committee@doclink.com
+Director: director@doclink.com
+Structural Engineer: structural@doclink.com
+Client User: client@doclink.com
+You can use any of these email addresses with the password password to log in.
+
+

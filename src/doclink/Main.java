@@ -1,27 +1,17 @@
 package doclink;
 
-
-import javax.swing.*;
+import doclink.ui.LoginFrame;
+import javax.swing.SwingUtilities;
 
 public class Main {
     public static void main(String[] args) {
-        // Always run Swing UI inside Event Dispatch Thread
+        // Ensure the database is initialized before starting the UI
+        Database.initializeDatabase();
+        Database.addDemoUsers();
+
         SwingUtilities.invokeLater(() -> {
-            try {
-                // Use system look & feel for modern UI (Windows/Mac/Linux)
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception e) {
-                System.err.println("Could not set LookAndFeel: " + e.getMessage());
-            }
-
-            // Initialize the database and ensure demo user exists
-            Database.insertDemoUser();
-
-            // Launch the main app window
-            AppFrame app = new AppFrame();
-            app.showFrame("DocLink Login");
-            app.showLogo();
-            app.showLogin();
+            LoginFrame loginFrame = new LoginFrame();
+            loginFrame.setVisible(true);
         });
     }
 }
