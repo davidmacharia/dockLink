@@ -2,18 +2,27 @@ package doclink.ui;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DashboardCardsPanel extends JPanel {
+    private List<JPanel> cards; // Store references to the cards
 
     public DashboardCardsPanel() {
         setLayout(new GridLayout(1, 3, 20, 0)); // 1 row, 3 columns, 20px horizontal gap
         setBackground(new Color(245, 247, 250)); // Very light grey
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20)); // Padding
 
-        // Placeholder cards
-        add(createCard("Pending Plans", 5, new Color(255, 193, 7))); // Yellow
-        add(createCard("Approved Plans", 12, new Color(40, 167, 69))); // Green
-        add(createCard("Deferred/Returned", 3, new Color(220, 53, 69))); // Red
+        cards = new ArrayList<>();
+
+        // Initialize and add placeholder cards
+        cards.add(createCard("Card 1 Title", 0, new Color(255, 193, 7)));
+        cards.add(createCard("Card 2 Title", 0, new Color(40, 167, 69)));
+        cards.add(createCard("Card 3 Title", 0, new Color(220, 53, 69)));
+
+        for (JPanel card : cards) {
+            add(card);
+        }
     }
 
     private JPanel createCard(String title, int count, Color bgColor) {
@@ -40,12 +49,18 @@ public class DashboardCardsPanel extends JPanel {
     }
 
     public void updateCard(int index, String title, int count, Color bgColor) {
-        // This method would update the content of a specific card
-        // For now, it's a placeholder. You'd need to store references to the cards.
-        // Example:
-        // JPanel card = (JPanel) getComponent(index);
-        // ((JLabel) card.getComponent(0)).setText(title);
-        // ((JLabel) card.getComponent(1)).setText(String.valueOf(count));
-        // card.setBackground(bgColor);
+        if (index >= 0 && index < cards.size()) {
+            JPanel card = cards.get(index);
+            // Update title
+            ((JLabel) card.getComponent(0)).setText(title);
+            // Update count
+            ((JLabel) card.getComponent(1)).setText(String.valueOf(count));
+            // Update background color
+            card.setBackground(bgColor);
+            card.revalidate();
+            card.repaint();
+        } else {
+            System.err.println("Error: Card index out of bounds: " + index);
+        }
     }
 }

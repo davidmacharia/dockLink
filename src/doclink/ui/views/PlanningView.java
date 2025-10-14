@@ -5,6 +5,7 @@ import doclink.models.Billing;
 import doclink.models.Log;
 import doclink.models.Plan;
 import doclink.models.User;
+import doclink.models.Document; // Import Document model
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
@@ -15,6 +16,8 @@ import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.ArrayList;
+import java.io.File; // For opening files
 
 public class PlanningView extends JPanel implements Dashboard.Refreshable {
     private User currentUser;
@@ -26,7 +29,7 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
     // Plan details panel
     private JLabel planIdLabel, applicantNameLabel, plotNoLabel, statusLabel;
     private JTextField referenceNoField, billingAmountField;
-    private JButton assignRefNoButton, sendBillingButton, forwardToCommitteeButton; // Added forwardToCommitteeButton
+    private JButton assignRefNoButton, sendBillingButton, forwardToCommitteeButton, forwardRejectedToReceptionButton, viewDocumentsButton; // Added viewDocumentsButton
 
     private Plan selectedPlan;
 
@@ -131,7 +134,6 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
         panel.add(new JLabel("Billing Amount:"), gbc);
         gbc.gridx = 1;
         billingAmountField = new JTextField(15);
-        billingAmountField.setEditable(false); // Make billing amount read-only
         panel.add(billingAmountField, gbc);
 
         gbc.gridx = 0;
@@ -146,9 +148,27 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
         gbc.gridy++;
         gbc.gridwidth = 2;
         forwardToCommitteeButton = createStyledButton("Forward to Technical Committee");
-        forwardToCommitteeButton.addActionListener(e -> forwardToCommittee());
-        forwardToCommitteeButton.setEnabled(false); // Initially disabled
+        forwardToCommitteeButton.addActionListener(e -> forwardToTechnicalCommittee());
         panel.add(forwardToCommitteeButton, gbc);
+
+        // Forward Rejected to Reception Button
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        forwardRejectedToReceptionButton = createStyledButton("Forward Rejected to Reception (for Client)");
+        forwardRejectedToReceptionButton.setBackground(new Color(220, 53, 69)); // Red for rejected
+        forwardRejectedToReceptionButton.addActionListener(e -> forwardRejectedToReception());
+        panel.add(forwardRejectedToReceptionButton, gbc);
+
+        // View Documents Button
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        viewDocumentsButton = createStyledButton("View Documents");
+        viewDocumentsButton.setBackground(new Color(108, 117, 125)); // Grey
+        viewDocumentsButton.addActionListener(e -> viewPlanDocuments());
+        viewDocumentsButton.setEnabled(false); // Initially disabled
+        panel.add(viewDocumentsButton, gbc);
 
         // Add some vertical glue to push components to the top
         gbc.gridx = 0;
@@ -176,6 +196,27 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
         return button;
     }
 
+    private JButton createStyledButton(String text, Color bgColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setBackground(bgColor);
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setOpaque(true);
+        button.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(bgColor.darker());
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(bgColor);
+            }
+        });
+        return button;
+    }
+
     private void loadSelectedPlanDetails() {
         int selectedRow = tablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
@@ -193,15 +234,28 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
                 boolean isUnderReviewPlanning = selectedPlan.getStatus().equals("Under Review (Planning)");
                 boolean isAwaitingPayment = selectedPlan.getStatus().equals("Awaiting Payment");
                 boolean isPaymentReceived = selectedPlan.getStatus().equals("Payment Received");
+                boolean isRejectedByDirector = selectedPlan.getStatus().equals("Rejected (to Planning)");
+                boolean isDeferredByDirector = selectedPlan.getStatus().equals("Deferred (to Planning)");
+                boolean isRejectedByCommittee = selectedPlan.getStatus().equals("Rejected"); // From Committee
+                boolean isDeferredByCommittee = selectedPlan.getStatus().equals("Deferred"); // From Committee
+                boolean isRejectedByStructural = selectedPlan.getStatus().equals("Rejected by Structural (to Planning)");
 
-                assignRefNoButton.setEnabled(isUnderReviewPlanning);
-                sendBillingButton.setEnabled(isUnderReviewPlanning && selectedPlan.getReferenceNo() != null && !selectedPlan.getReferenceNo().isEmpty()); // Can only send billing if ref no is assigned
-                forwardToCommitteeButton.setEnabled(isPaymentReceived); // Enable if payment is received
+
+                // Assign Ref No button enabled for 'Under Review (Planning)' or 'Payment Received' or returned plans
+                assignRefNoButton.setEnabled(isUnderReviewPlanning || isPaymentReceived || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural);
+                sendBillingButton.setEnabled(isUnderReviewPlanning || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural);
+                forwardToCommitteeButton.setEnabled(isPaymentReceived || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural); // Enable if payment is received or if returned for re-evaluation
+                
+                // Forward Rejected to Reception button enabled if rejected by Director, Committee, or Structural
+                forwardRejectedToReceptionButton.setEnabled(isRejectedByDirector || isRejectedByCommittee || isRejectedByStructural);
+                viewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
+
 
                 Billing existingBilling = Database.getBillingByPlanId(planId);
                 if (existingBilling != null) {
-                    billingAmountField.setText(String.format("%.2f", existingBilling.getAmount()));
-                    sendBillingButton.setEnabled(false); // Already billed
+                    billingAmountField.setText(String.valueOf(existingBilling.getAmount()));
+                    // If already billed, only enable sendBillingButton if it's a returned plan that needs re-billing
+                    sendBillingButton.setEnabled(isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural);
                 } else {
                     billingAmountField.setText("");
                 }
@@ -214,8 +268,12 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
             JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        if (!selectedPlan.getStatus().equals("Under Review (Planning)")) {
-            JOptionPane.showMessageDialog(this, "Reference number can only be assigned to plans 'Under Review (Planning)'.", "Error", JOptionPane.ERROR_MESSAGE);
+        // Allow assigning reference number if status is 'Under Review (Planning)' or 'Payment Received' or returned
+        if (!selectedPlan.getStatus().equals("Under Review (Planning)") && !selectedPlan.getStatus().equals("Payment Received") &&
+            !selectedPlan.getStatus().equals("Rejected (to Planning)") && !selectedPlan.getStatus().equals("Deferred (to Planning)") &&
+            !selectedPlan.getStatus().equals("Rejected") && !selectedPlan.getStatus().equals("Deferred") &&
+            !selectedPlan.getStatus().equals("Rejected by Structural (to Planning)")) {
+            JOptionPane.showMessageDialog(this, "Reference number can only be assigned to plans 'Under Review (Planning)', 'Payment Received', or returned plans.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -230,7 +288,7 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), currentUser.getRole(), "Assigned Reference No", "Reference number " + refNo + " assigned."));
         JOptionPane.showMessageDialog(this, "Reference number assigned successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
         refreshData();
-        loadSelectedPlanDetails(); // Reload to update UI and button states
+        loadSelectedPlanDetails(); // Reload to update UI
     }
 
     private void sendBillingToReception() {
@@ -238,31 +296,49 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
             JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        if (!selectedPlan.getStatus().equals("Under Review (Planning)")) {
-            JOptionPane.showMessageDialog(this, "Billing can only be sent for plans 'Under Review (Planning)'.", "Error", JOptionPane.ERROR_MESSAGE);
+        // Allow sending billing for 'Under Review (Planning)' or returned plans
+        if (!selectedPlan.getStatus().equals("Under Review (Planning)") &&
+            !selectedPlan.getStatus().equals("Rejected (to Planning)") && !selectedPlan.getStatus().equals("Deferred (to Planning)") &&
+            !selectedPlan.getStatus().equals("Rejected") && !selectedPlan.getStatus().equals("Deferred") &&
+            !selectedPlan.getStatus().equals("Rejected by Structural (to Planning)")) {
+            JOptionPane.showMessageDialog(this, "Billing can only be sent for plans 'Under Review (Planning)' or returned plans.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
-        }
-        if (selectedPlan.getReferenceNo() == null || selectedPlan.getReferenceNo().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please assign a reference number before sending billing.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        String amountStr = JOptionPane.showInputDialog(this, "Enter billing amount for Plan ID " + selectedPlan.getId() + ":", "Billing Amount", JOptionPane.QUESTION_MESSAGE);
-        if (amountStr == null || amountStr.trim().isEmpty()) {
-            return; // User cancelled or entered empty
         }
 
         double amount;
         try {
-            amount = Double.parseDouble(amountStr);
+            amount = Double.parseDouble(billingAmountField.getText());
             if (amount <= 0) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Please enter a valid positive billing amount.", "Input Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        Billing newBilling = new Billing(selectedPlan.getId(), amount);
-        Database.addBilling(newBilling);
+        Billing existingBilling = Database.getBillingByPlanId(selectedPlan.getId());
+        if (existingBilling != null) {
+            // If billing already exists, update it or confirm re-billing
+            int confirm = JOptionPane.showConfirmDialog(this, "Billing already exists for this plan. Do you want to update the amount and resend?", "Confirm Re-billing", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.NO_OPTION) {
+                return;
+            }
+            // For simplicity, we'll just add a new billing entry or update the existing one.
+            // In a real system, you might have a more robust billing history.
+            // For now, let's assume we're creating a new one if it's a re-submission.
+            // Or, if the existing one is unpaid, we can update its amount.
+            // For this scenario, let's assume if it's a returned plan, we can create a new billing or update.
+            // For simplicity, I'll just add a new one if the status is not 'Awaiting Payment'
+            if (!selectedPlan.getStatus().equals("Awaiting Payment")) {
+                 Database.addBilling(new Billing(selectedPlan.getId(), amount));
+            } else {
+                // If it's already awaiting payment, we might want to update the existing billing amount
+                // This would require a Database.updateBillingAmount method. For now, we'll proceed as if it's a new billing.
+                Database.addBilling(new Billing(selectedPlan.getId(), amount));
+            }
+        } else {
+            Database.addBilling(new Billing(selectedPlan.getId(), amount));
+        }
+
+
         Database.updatePlanStatus(selectedPlan.getId(), "Awaiting Payment", "Billing sent to Reception for client notification.");
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Reception", "Sent Billing Details", "Billing amount: " + amount));
 
@@ -272,26 +348,78 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
         parentDashboard.showRoleDashboard("Planning"); // Refresh current view
     }
 
-    private void forwardToCommittee() {
+    private void forwardToTechnicalCommittee() {
         if (selectedPlan == null) {
             JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        if (!selectedPlan.getStatus().equals("Payment Received")) {
-            JOptionPane.showMessageDialog(this, "Plan must have 'Payment Received' status to be forwarded to Committee.", "Error", JOptionPane.ERROR_MESSAGE);
+        // Allow forwarding if payment received or if it's a returned plan that needs re-evaluation
+        if (!selectedPlan.getStatus().equals("Payment Received") &&
+            !selectedPlan.getStatus().equals("Rejected (to Planning)") && !selectedPlan.getStatus().equals("Deferred (to Planning)") &&
+            !selectedPlan.getStatus().equals("Rejected") && !selectedPlan.getStatus().equals("Deferred") &&
+            !selectedPlan.getStatus().equals("Rejected by Structural (to Planning)")) {
+            JOptionPane.showMessageDialog(this, "This plan is not ready to be forwarded to the Technical Committee (Payment not received or not a returned plan for re-evaluation).", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to forward Plan ID " + selectedPlan.getId() + " to the Technical Committee?", "Confirm Forward", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            Database.updatePlanStatus(selectedPlan.getId(), "Under Review (Committee)", "Forwarded to Technical Committee for review.");
-            Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Committee", "Forwarded for Review", "Payment confirmed, forwarded to Technical Committee."));
+        Database.updatePlanStatus(selectedPlan.getId(), "Under Review (Committee)", "Forwarded to Technical Committee after payment received or re-evaluation.");
+        Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Committee", "Forwarded for Review", "Payment confirmed or re-evaluation requested."));
 
-            JOptionPane.showMessageDialog(this, "Plan forwarded to Technical Committee successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-            refreshData();
-            loadSelectedPlanDetails(); // Reload to update UI and button states
-            parentDashboard.showRoleDashboard("Planning"); // Refresh current view
+        JOptionPane.showMessageDialog(this, "Plan forwarded to Technical Committee successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        refreshData();
+        loadSelectedPlanDetails(); // Reload to update UI
+        parentDashboard.showRoleDashboard("Planning"); // Refresh current view
+    }
+
+    private void forwardRejectedToReception() {
+        if (selectedPlan == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+        // Only allow forwarding if the plan is in a rejected state from Director, Committee, or Structural
+        if (!selectedPlan.getStatus().equals("Rejected (to Planning)") &&
+            !selectedPlan.getStatus().equals("Rejected") &&
+            !selectedPlan.getStatus().equals("Rejected by Structural (to Planning)")) {
+            JOptionPane.showMessageDialog(this, "This plan is not in a rejected state to be forwarded to Reception.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Database.updatePlanStatus(selectedPlan.getId(), "Rejected (to Reception for Client)", "Rejected plan forwarded to Reception for client communication.");
+        Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Reception", "Forwarded Rejected to Client", "Plan rejected, client needs to be notified."));
+
+        JOptionPane.showMessageDialog(this, "Rejected plan forwarded to Reception for client communication.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        refreshData();
+        loadSelectedPlanDetails(); // Reload to update UI
+        parentDashboard.showRoleDashboard("Planning"); // Refresh current view
+    }
+
+    private void viewPlanDocuments() {
+        if (selectedPlan == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        List<Document> documents = Database.getDocumentsByPlanId(selectedPlan.getId());
+        if (documents.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No documents found for this plan.", "Documents", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        StringBuilder docList = new StringBuilder("Documents for Plan ID: " + selectedPlan.getId() + "\n\n");
+        for (Document doc : documents) {
+            docList.append("Name: ").append(doc.getDocName())
+                   .append(" (Type: ").append(doc.getDocumentType()).append(")\n")
+                   .append("Path: ").append(doc.getFilePath() != null ? doc.getFilePath() : "N/A").append("\n\n");
+        }
+
+        JTextArea textArea = new JTextArea(docList.toString());
+        textArea.setEditable(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(500, 300));
+
+        JOptionPane.showMessageDialog(this, scrollPane, "Plan Documents", JOptionPane.PLAIN_MESSAGE);
     }
 
     @Override
@@ -299,16 +427,29 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
         // Update cards
         int pendingPlanning = Database.getPlansByStatus("Under Review (Planning)").size();
         int awaitingPayment = Database.getPlansByStatus("Awaiting Payment").size();
-        int paymentReceived = Database.getPlansByStatus("Payment Received").size();
+        int paymentReceived = Database.getPlansByStatus("Payment Received").size(); // Plans returned from Reception after payment
+        int returnedFromDirectorOrCommitteeOrStructural = Database.getPlansByStatus("Rejected (to Planning)").size() +
+                                             Database.getPlansByStatus("Deferred (to Planning)").size() +
+                                             Database.getPlansByStatus("Rejected").size() + // From Committee
+                                             Database.getPlansByStatus("Deferred").size() + // From Committee
+                                             Database.getPlansByStatus("Rejected by Structural (to Planning)").size();
+
 
         cardsPanel.updateCard(0, "New Plans for Review", pendingPlanning, new Color(255, 193, 7));
         cardsPanel.updateCard(1, "Awaiting Payment", awaitingPayment, new Color(255, 165, 0)); // Orange
-        cardsPanel.updateCard(2, "Payment Received", paymentReceived, new Color(40, 167, 69)); // Green
+        cardsPanel.updateCard(2, "Payment Received / Returned", paymentReceived + returnedFromDirectorOrCommitteeOrStructural, new Color(40, 167, 69)); // Green
 
-        // Update table with plans relevant to Planning (Under Review, Awaiting Payment, Payment Received)
-        List<Plan> planningPlans = Database.getPlansByStatus("Under Review (Planning)");
+        // Update table with plans relevant to Planning (Under Review, Awaiting Payment, Payment Received, Rejected/Deferred)
+        List<Plan> planningPlans = new ArrayList<>();
+        planningPlans.addAll(Database.getPlansByStatus("Under Review (Planning)"));
         planningPlans.addAll(Database.getPlansByStatus("Awaiting Payment"));
         planningPlans.addAll(Database.getPlansByStatus("Payment Received"));
+        planningPlans.addAll(Database.getPlansByStatus("Rejected (to Planning)"));
+        planningPlans.addAll(Database.getPlansByStatus("Deferred (to Planning)"));
+        planningPlans.addAll(Database.getPlansByStatus("Rejected")); // From Committee
+        planningPlans.addAll(Database.getPlansByStatus("Deferred")); // From Committee
+        planningPlans.addAll(Database.getPlansByStatus("Rejected by Structural (to Planning)"));
+
         tablePanel.updateTable(planningPlans);
 
         // Clear details if no plan is selected or if selected plan is no longer relevant
@@ -323,6 +464,8 @@ public class PlanningView extends JPanel implements Dashboard.Refreshable {
             assignRefNoButton.setEnabled(false);
             sendBillingButton.setEnabled(false);
             forwardToCommitteeButton.setEnabled(false);
+            forwardRejectedToReceptionButton.setEnabled(false);
+            viewDocumentsButton.setEnabled(false);
         } else if (selectedPlan != null) {
             // Re-load details for the currently selected plan to reflect any status changes
             loadSelectedPlanDetails();

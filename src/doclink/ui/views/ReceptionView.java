@@ -17,14 +17,17 @@ import java.awt.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.File; // For opening files
 
 public class ReceptionView extends JPanel implements Dashboard.Refreshable {
     private User currentUser;
     private Dashboard parentDashboard;
 
     private DashboardCardsPanel cardsPanel;
-    private DashboardTablePanel submittedPlansTablePanel; // Renamed for clarity
-    private DashboardTablePanel paymentPlansTablePanel; // New table for payment processing
+    private DashboardTablePanel allPlansTablePanel; // Renamed for clarity
+    private DashboardTablePanel paymentTablePanel; // New table for payment processing
+    private DashboardTablePanel directorDecisionsTablePanel; // New table for Director decisions
+    private DashboardTablePanel clientCommunicationTablePanel; // New table for client communication
 
     // Form components for New Plan Submission
     private JTextField applicantNameField;
@@ -33,12 +36,27 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
     private JTextField locationField;
     private JCheckBox sitePlanCb, titleDeedCb, drawingsCb, otherDocsCb;
     private JTextArea remarksArea;
+    private JButton submitPlanButton; // Added submitPlanButton
 
-    // Form components for Payment Processing
-    private JLabel paymentPlanIdLabel, paymentApplicantNameLabel, paymentPlotNoLabel, paymentAmountLabel;
+    // Components for Payment Processing
+    private JLabel paymentPlanIdLabel, paymentApplicantNameLabel, paymentPlotNoLabel, paymentStatusLabel, paymentAmountLabel;
     private JTextField receiptNoField;
-    private JButton recordPaymentButton;
-    private Plan selectedPlanForPayment;
+    private JButton attachReceiptButton, paymentViewDocumentsButton; // Added paymentViewDocumentsButton
+    private Plan selectedPlanForPayment; // To hold the plan selected in the payment table
+
+    // Components for Director Decisions
+    private JLabel directorPlanIdLabel, directorApplicantNameLabel, directorPlotNoLabel, directorStatusLabel;
+    private JButton forwardToStructuralButton, releaseToClientButton, directorDecisionViewDocumentsButton; // Added directorDecisionViewDocumentsButton
+    private Plan selectedPlanForDirectorDecision;
+
+    // Components for Client Communication
+    private JLabel clientCommPlanIdLabel, clientCommApplicantNameLabel, clientCommPlotNoLabel, clientCommStatusLabel;
+    private JButton notifyClientButton, clientCommViewDocumentsButton; // Added clientCommViewDocumentsButton
+    private Plan selectedPlanForClientCommunication;
+
+    private JPanel receptionSidebar; // New sidebar for ReceptionView
+    private JPanel receptionContentPanel; // Panel to hold different views with CardLayout
+    private CardLayout receptionCardLayout; // CardLayout for switching views
 
     public ReceptionView(User user, Dashboard parentDashboard) {
         this.currentUser = user;
@@ -50,25 +68,85 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         cardsPanel = new DashboardCardsPanel();
         add(cardsPanel, BorderLayout.NORTH);
 
-        // Center section: Tabbed Pane for Submission Form and Plans Table
-        JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        // Create Reception-specific sidebar
+        receptionSidebar = createReceptionSidebar();
+        add(receptionSidebar, BorderLayout.WEST);
 
-        // New Plan Submission Tab
+        // Create content panel with CardLayout
+        receptionCardLayout = new CardLayout();
+        receptionContentPanel = new JPanel(receptionCardLayout);
+        receptionContentPanel.setBackground(new Color(245, 247, 250));
+
+        // Initialize existing panels and add them to receptionContentPanel
         JPanel submissionPanel = createSubmissionFormPanel();
-        tabbedPane.addTab("New Plan Submission", submissionPanel);
+        allPlansTablePanel = new DashboardTablePanel();
+        JPanel paymentPanel = createPaymentHandlingPanel();
+        JPanel directorDecisionsPanel = createDirectorDecisionsPanel();
+        JPanel clientCommunicationPanel = createClientCommunicationPanel();
 
-        // Submitted Plans Table Tab
-        submittedPlansTablePanel = new DashboardTablePanel();
-        tabbedPane.addTab("Submitted Plans", submittedPlansTablePanel);
+        receptionContentPanel.add(submissionPanel, "New Plan Submission");
+        receptionContentPanel.add(allPlansTablePanel, "All Plans");
+        receptionContentPanel.add(paymentPanel, "Payment Processing");
+        receptionContentPanel.add(directorDecisionsPanel, "Director Decisions");
+        receptionContentPanel.add(clientCommunicationPanel, "Client Communication");
 
-        // Payment Processing Tab
-        JPanel paymentProcessingPanel = createPaymentProcessingPanel();
-        tabbedPane.addTab("Payment Processing", paymentProcessingPanel);
+        add(receptionContentPanel, BorderLayout.CENTER);
 
-        add(tabbedPane, BorderLayout.CENTER);
+        // Show initial view (e.g., New Plan Submission)
+        receptionCardLayout.show(receptionContentPanel, "New Plan Submission");
 
         refreshData(); // Load initial data
+    }
+
+    private JPanel createReceptionSidebar() {
+        JPanel sidebar = new JPanel();
+        sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+        sidebar.setPreferredSize(new Dimension(200, 0)); // Adjust width as needed
+        sidebar.setBackground(new Color(230, 235, 240)); // Light grey for reception sidebar
+        sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(220, 220, 220))); // Right border
+
+        JLabel title = new JLabel("Reception Menu");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(new Color(26, 35, 126));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(15, 0, 20, 0));
+        sidebar.add(title);
+
+        addReceptionSidebarButton(sidebar, "New Plan Submission");
+        addReceptionSidebarButton(sidebar, "All Plans");
+        addReceptionSidebarButton(sidebar, "Payment Processing");
+        addReceptionSidebarButton(sidebar, "Director Decisions");
+        addReceptionSidebarButton(sidebar, "Client Communication");
+
+        sidebar.add(Box.createVerticalGlue()); // Push buttons to top
+
+        return sidebar;
+    }
+
+    private void addReceptionSidebarButton(JPanel sidebar, String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        button.setForeground(new Color(26, 35, 126));
+        button.setBackground(new Color(0,0,0,0)); // Transparent
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(200, 210, 220)); // Light hover effect
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(0,0,0,0));
+            }
+        });
+
+        button.addActionListener(e -> receptionCardLayout.show(receptionContentPanel, text));
+        sidebar.add(button);
+        sidebar.add(Box.createVerticalStrut(5)); // Small spacing
     }
 
     private JPanel createSubmissionFormPanel() {
@@ -154,114 +232,341 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
 
         // Submit Button
         gbc.gridy++;
-        JButton submitButton = new JButton("Submit Plan");
-        submitButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        submitButton.setBackground(new Color(0, 123, 255));
-        submitButton.setForeground(Color.WHITE);
-        submitButton.setFocusPainted(false);
-        submitButton.setBorderPainted(false);
-        submitButton.setOpaque(true);
-        submitButton.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-        submitButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        submitButton.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) { submitButton.setBackground(new Color(0, 100, 200)); }
-            public void mouseExited(java.awt.event.MouseEvent evt) { submitButton.setBackground(new Color(0, 123, 255)); }
+        submitPlanButton = new JButton("Submit Plan");
+        submitPlanButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        submitPlanButton.setBackground(new Color(0, 123, 255));
+        submitPlanButton.setForeground(Color.WHITE);
+        submitPlanButton.setFocusPainted(false);
+        submitPlanButton.setBorderPainted(false);
+        submitPlanButton.setOpaque(true);
+        submitPlanButton.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        submitPlanButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        submitPlanButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) { submitPlanButton.setBackground(new Color(0, 100, 200)); }
+            public void mouseExited(java.awt.event.MouseEvent evt) { submitPlanButton.setBackground(new Color(0, 123, 255)); }
         });
-        submitButton.addActionListener(e -> submitNewPlan());
-        panel.add(submitButton, gbc);
+        submitPlanButton.addActionListener(e -> submitNewPlan());
+        panel.add(submitPlanButton, gbc);
 
         return panel;
     }
 
-    private JPanel createPaymentProcessingPanel() {
+    private JPanel createPaymentHandlingPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBackground(new Color(245, 247, 250));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         splitPane.setDividerLocation(0.7); // 70% for table, 30% for details
         splitPane.setResizeWeight(0.7);
-        splitPane.setBackground(Color.WHITE);
+        splitPane.setBackground(new Color(245, 247, 250));
 
-        paymentPlansTablePanel = new DashboardTablePanel();
-        paymentPlansTablePanel.getPlansTable().getSelectionModel().addListSelectionListener(new ListSelectionListener() {
+        paymentTablePanel = new DashboardTablePanel();
+        paymentTablePanel.getPlansTable().getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
-                if (!e.getValueIsAdjusting() && paymentPlansTablePanel.getPlansTable().getSelectedRow() != -1) {
-                    loadSelectedPlanForPayment();
+                if (!e.getValueIsAdjusting() && paymentTablePanel.getPlansTable().getSelectedRow() != -1) {
+                    loadSelectedPlanForPaymentDetails();
                 }
             }
         });
-        splitPane.setLeftComponent(paymentPlansTablePanel);
+        splitPane.setLeftComponent(paymentTablePanel);
 
-        JPanel detailsPanel = new JPanel(new GridBagLayout());
-        detailsPanel.setBackground(Color.WHITE);
-        detailsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JPanel paymentDetailsPanel = createPaymentDetailsPanel();
+        splitPane.setRightComponent(paymentDetailsPanel);
+
+        panel.add(splitPane, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createPaymentDetailsPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(8, 8, 8, 8);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.anchor = GridBagConstraints.WEST;
 
-        JLabel title = new JLabel("Payment Details");
+        JLabel title = new JLabel("Payment Details & Actions");
         title.setFont(new Font("Segoe UI", Font.BOLD, 20));
         title.setForeground(new Color(26, 35, 126));
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 2;
-        detailsPanel.add(title, gbc);
+        panel.add(title, gbc);
 
         gbc.gridy++;
         gbc.gridwidth = 1;
-        detailsPanel.add(new JLabel("Plan ID:"), gbc);
+        panel.add(new JLabel("Plan ID:"), gbc);
         gbc.gridx = 1;
         paymentPlanIdLabel = new JLabel("N/A");
-        detailsPanel.add(paymentPlanIdLabel, gbc);
+        panel.add(paymentPlanIdLabel, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
-        detailsPanel.add(new JLabel("Applicant:"), gbc);
+        panel.add(new JLabel("Applicant:"), gbc);
         gbc.gridx = 1;
         paymentApplicantNameLabel = new JLabel("N/A");
-        detailsPanel.add(paymentApplicantNameLabel, gbc);
+        panel.add(paymentApplicantNameLabel, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
-        detailsPanel.add(new JLabel("Plot No:"), gbc);
+        panel.add(new JLabel("Plot No:"), gbc);
         gbc.gridx = 1;
         paymentPlotNoLabel = new JLabel("N/A");
-        detailsPanel.add(paymentPlotNoLabel, gbc);
+        panel.add(paymentPlotNoLabel, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
-        detailsPanel.add(new JLabel("Amount Due:"), gbc);
+        panel.add(new JLabel("Status:"), gbc);
+        gbc.gridx = 1;
+        paymentStatusLabel = new JLabel("N/A");
+        panel.add(paymentStatusLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Billing Amount:"), gbc);
         gbc.gridx = 1;
         paymentAmountLabel = new JLabel("N/A");
-        detailsPanel.add(paymentAmountLabel, gbc);
+        panel.add(paymentAmountLabel, gbc);
 
+        // Receipt Number
         gbc.gridx = 0;
         gbc.gridy++;
-        detailsPanel.add(new JLabel("Receipt No:"), gbc);
+        panel.add(new JLabel("Receipt No:"), gbc);
         gbc.gridx = 1;
         receiptNoField = new JTextField(15);
-        detailsPanel.add(receiptNoField, gbc);
+        panel.add(receiptNoField, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
         gbc.gridwidth = 2;
-        recordPaymentButton = createStyledButton("Record Payment");
-        recordPaymentButton.addActionListener(e -> recordPayment());
-        recordPaymentButton.setEnabled(false); // Initially disabled
-        detailsPanel.add(recordPaymentButton, gbc);
+        attachReceiptButton = createStyledButton("Attach Receipt & Forward to Planning");
+        attachReceiptButton.addActionListener(e -> attachReceiptAndForward());
+        panel.add(attachReceiptButton, gbc);
+
+        // View Documents Button
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        paymentViewDocumentsButton = createStyledButton("View Documents");
+        paymentViewDocumentsButton.setBackground(new Color(108, 117, 125)); // Grey
+        paymentViewDocumentsButton.addActionListener(e -> viewPlanDocuments(selectedPlanForPayment));
+        paymentViewDocumentsButton.setEnabled(false); // Initially disabled
+        panel.add(paymentViewDocumentsButton, gbc);
 
         // Add some vertical glue to push components to the top
         gbc.gridx = 0;
         gbc.gridy++;
         gbc.weighty = 1.0; // Make this row expand vertically
-        detailsPanel.add(Box.createVerticalGlue(), gbc);
+        panel.add(Box.createVerticalGlue(), gbc);
 
-        splitPane.setRightComponent(detailsPanel);
+        return panel;
+    }
+
+    private JPanel createDirectorDecisionsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(245, 247, 250));
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        splitPane.setDividerLocation(0.7); // 70% for table, 30% for details
+        splitPane.setResizeWeight(0.7);
+        splitPane.setBackground(new Color(245, 247, 250));
+
+        directorDecisionsTablePanel = new DashboardTablePanel();
+        directorDecisionsTablePanel.getPlansTable().getSelectionModel().addListSelectionListener(new ListSelectionListener() {
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting() && directorDecisionsTablePanel.getPlansTable().getSelectedRow() != -1) {
+                    loadSelectedPlanForDirectorDecisionDetails();
+                }
+            }
+        });
+        splitPane.setLeftComponent(directorDecisionsTablePanel);
+
+        JPanel decisionDetailsPanel = createDirectorDecisionDetailsPanel();
+        splitPane.setRightComponent(decisionDetailsPanel);
+
         panel.add(splitPane, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createDirectorDecisionDetailsPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+
+        JLabel title = new JLabel("Director's Decision Details & Actions");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        title.setForeground(new Color(26, 35, 126));
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        panel.add(title, gbc);
+
+        gbc.gridy++;
+        gbc.gridwidth = 1;
+        panel.add(new JLabel("Plan ID:"), gbc);
+        gbc.gridx = 1;
+        directorPlanIdLabel = new JLabel("N/A");
+        panel.add(directorPlanIdLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Applicant:"), gbc);
+        gbc.gridx = 1;
+        directorApplicantNameLabel = new JLabel("N/A");
+        panel.add(directorApplicantNameLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Plot No:"), gbc);
+        gbc.gridx = 1;
+        directorPlotNoLabel = new JLabel("N/A");
+        panel.add(directorPlotNoLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Status:"), gbc);
+        gbc.gridx = 1;
+        directorStatusLabel = new JLabel("N/A");
+        panel.add(directorStatusLabel, gbc);
+
+        // Action Buttons
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        forwardToStructuralButton = createStyledButton("Forward to Structural Department");
+        forwardToStructuralButton.addActionListener(e -> forwardToStructural());
+        panel.add(forwardToStructuralButton, gbc);
+
+        gbc.gridy++;
+        releaseToClientButton = createStyledButton("Release Plan to Client");
+        releaseToClientButton.addActionListener(e -> releaseToClient());
+        panel.add(releaseToClientButton, gbc);
+
+        // View Documents Button
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        directorDecisionViewDocumentsButton = createStyledButton("View Documents");
+        directorDecisionViewDocumentsButton.setBackground(new Color(108, 117, 125)); // Grey
+        directorDecisionViewDocumentsButton.addActionListener(e -> viewPlanDocuments(selectedPlanForDirectorDecision));
+        directorDecisionViewDocumentsButton.setEnabled(false); // Initially disabled
+        panel.add(directorDecisionViewDocumentsButton, gbc);
+
+        // Add some vertical glue to push components to the top
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.weighty = 1.0; // Make this row expand vertically
+        panel.add(Box.createVerticalGlue(), gbc);
+
+        return panel;
+    }
+
+    private JPanel createClientCommunicationPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(245, 247, 250));
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        splitPane.setDividerLocation(0.7); // 70% for table, 30% for details
+        splitPane.setResizeWeight(0.7);
+        splitPane.setBackground(new Color(245, 247, 250));
+
+        clientCommunicationTablePanel = new DashboardTablePanel();
+        clientCommunicationTablePanel.getPlansTable().getSelectionModel().addListSelectionListener(new ListSelectionListener() {
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting() && clientCommunicationTablePanel.getPlansTable().getSelectedRow() != -1) {
+                    loadSelectedPlanForClientCommunicationDetails();
+                }
+            }
+        });
+        splitPane.setLeftComponent(clientCommunicationTablePanel);
+
+        JPanel clientCommDetailsPanel = createClientCommunicationDetailsPanel();
+        splitPane.setRightComponent(clientCommDetailsPanel);
+
+        panel.add(splitPane, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createClientCommunicationDetailsPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+
+        JLabel title = new JLabel("Client Communication & Actions");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        title.setForeground(new Color(26, 35, 126));
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        panel.add(title, gbc);
+
+        gbc.gridy++;
+        gbc.gridwidth = 1;
+        panel.add(new JLabel("Plan ID:"), gbc);
+        gbc.gridx = 1;
+        clientCommPlanIdLabel = new JLabel("N/A");
+        panel.add(clientCommPlanIdLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Applicant:"), gbc);
+        gbc.gridx = 1;
+        clientCommApplicantNameLabel = new JLabel("N/A");
+        panel.add(clientCommApplicantNameLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Plot No:"), gbc);
+        gbc.gridx = 1;
+        clientCommPlotNoLabel = new JLabel("N/A");
+        panel.add(clientCommPlotNoLabel, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        panel.add(new JLabel("Status:"), gbc);
+        gbc.gridx = 1;
+        clientCommStatusLabel = new JLabel("N/A");
+        panel.add(clientCommStatusLabel, gbc);
+
+        // Action Button
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        notifyClientButton = createStyledButton("Notify Client & Mark for Resubmission");
+        notifyClientButton.setBackground(new Color(255, 165, 0)); // Orange for notification
+        notifyClientButton.addActionListener(e -> notifyClientAndMarkForResubmission());
+        panel.add(notifyClientButton, gbc);
+
+        // View Documents Button
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        clientCommViewDocumentsButton = createStyledButton("View Documents");
+        clientCommViewDocumentsButton.setBackground(new Color(108, 117, 125)); // Grey
+        clientCommViewDocumentsButton.addActionListener(e -> viewPlanDocuments(selectedPlanForClientCommunication));
+        clientCommViewDocumentsButton.setEnabled(false); // Initially disabled
+        panel.add(clientCommViewDocumentsButton, gbc);
+
+        // Add some vertical glue to push components to the top
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.weighty = 1.0; // Make this row expand vertically
+        panel.add(Box.createVerticalGlue(), gbc);
 
         return panel;
     }
@@ -279,6 +584,27 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) { button.setBackground(new Color(0, 100, 200)); }
             public void mouseExited(java.awt.event.MouseEvent evt) { button.setBackground(new Color(0, 123, 255)); }
+        });
+        return button;
+    }
+
+    private JButton createStyledButton(String text, Color bgColor) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setBackground(bgColor);
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setOpaque(true);
+        button.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(bgColor.darker());
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(bgColor);
+            }
         });
         return button;
     }
@@ -305,12 +631,8 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         if (!allAttached) {
             int confirm = JOptionPane.showConfirmDialog(this, "Some documents are not attached. Do you want to proceed and return to applicant?", "Incomplete Submission", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
-                // For now, just log and don't forward. Status remains 'Submitted' but with a remark.
-                Plan newPlan = new Plan(applicantName, contact, plotNo, location, LocalDate.now(), "Submitted", "Incomplete documents, returned to applicant.");
-                Database.addPlan(newPlan, documents);
-                Database.addLog(new Log(newPlan.getId(), currentUser.getRole(), "Client", "Incomplete Submission", "Documents missing."));
                 JOptionPane.showMessageDialog(this, "Plan marked as incomplete and returned to applicant.", "Submission Info", JOptionPane.INFORMATION_MESSAGE);
-                clearForm();
+                clearSubmissionForm();
                 refreshData();
                 return;
             } else {
@@ -326,12 +648,12 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         Database.addLog(new Log(newPlan.getId(), currentUser.getRole(), "Planning", "Forwarded for Review", "Initial submission, documents verified."));
 
         JOptionPane.showMessageDialog(this, "Plan submitted successfully and forwarded to Planning Department.", "Submission Success", JOptionPane.INFORMATION_MESSAGE);
-        clearForm();
+        clearSubmissionForm();
         refreshData();
         parentDashboard.showRoleDashboard("Reception"); // Refresh current view
     }
 
-    private void clearForm() {
+    private void clearSubmissionForm() {
         applicantNameField.setText("");
         contactField.setText("");
         plotNoField.setText("");
@@ -343,32 +665,36 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         otherDocsCb.setSelected(false);
     }
 
-    private void loadSelectedPlanForPayment() {
-        int selectedRow = paymentPlansTablePanel.getPlansTable().getSelectedRow();
+    private void loadSelectedPlanForPaymentDetails() {
+        int selectedRow = paymentTablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
-            int planId = (int) paymentPlansTablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            int planId = (int) paymentTablePanel.getPlansTable().getValueAt(selectedRow, 0);
             selectedPlanForPayment = Database.getPlanById(planId);
 
             if (selectedPlanForPayment != null) {
                 paymentPlanIdLabel.setText(String.valueOf(selectedPlanForPayment.getId()));
                 paymentApplicantNameLabel.setText(selectedPlanForPayment.getApplicantName());
                 paymentPlotNoLabel.setText(selectedPlanForPayment.getPlotNo());
+                paymentStatusLabel.setText(selectedPlanForPayment.getStatus());
 
                 Billing billing = Database.getBillingByPlanId(planId);
                 if (billing != null) {
                     paymentAmountLabel.setText(String.format("%.2f", billing.getAmount()));
                     receiptNoField.setText(billing.getReceiptNo() != null ? billing.getReceiptNo() : "");
-                    recordPaymentButton.setEnabled(billing.getReceiptNo() == null); // Enable only if not already paid
                 } else {
                     paymentAmountLabel.setText("N/A");
                     receiptNoField.setText("");
-                    recordPaymentButton.setEnabled(false);
                 }
+
+                // Enable button only if status is "Awaiting Payment" and no receipt is attached yet
+                boolean isAwaitingPayment = selectedPlanForPayment.getStatus().equals("Awaiting Payment");
+                attachReceiptButton.setEnabled(isAwaitingPayment && (billing == null || billing.getReceiptNo() == null));
+                paymentViewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
             }
         }
     }
 
-    private void recordPayment() {
+    private void attachReceiptAndForward() {
         if (selectedPlanForPayment == null) {
             JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -385,18 +711,19 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         }
 
         Billing billing = Database.getBillingByPlanId(selectedPlanForPayment.getId());
-        if (billing != null) {
-            Database.updateBillingPayment(billing.getId(), receiptNo);
-            Database.updatePlanStatus(selectedPlanForPayment.getId(), "Payment Received", "Payment recorded by Reception. Receipt No: " + receiptNo);
-            Database.addLog(new Log(selectedPlanForPayment.getId(), currentUser.getRole(), "Planning", "Payment Recorded", "Receipt No: " + receiptNo));
-
-            JOptionPane.showMessageDialog(this, "Payment recorded successfully. Plan status updated to 'Payment Received'.", "Success", JOptionPane.INFORMATION_MESSAGE);
-            clearPaymentDetails();
-            refreshData();
-            parentDashboard.showRoleDashboard("Reception"); // Refresh current view
-        } else {
+        if (billing == null) {
             JOptionPane.showMessageDialog(this, "No billing record found for this plan.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+
+        Database.updateBillingPayment(billing.getId(), receiptNo);
+        Database.updatePlanStatus(selectedPlanForPayment.getId(), "Payment Received", "Payment received with receipt: " + receiptNo);
+        Database.addLog(new Log(selectedPlanForPayment.getId(), currentUser.getRole(), "Planning", "Payment Received", "Receipt No: " + receiptNo));
+
+        JOptionPane.showMessageDialog(this, "Payment recorded and plan forwarded to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        clearPaymentDetails();
+        refreshData();
+        parentDashboard.showRoleDashboard("Reception"); // Refresh current view
     }
 
     private void clearPaymentDetails() {
@@ -404,40 +731,226 @@ public class ReceptionView extends JPanel implements Dashboard.Refreshable {
         paymentPlanIdLabel.setText("N/A");
         paymentApplicantNameLabel.setText("N/A");
         paymentPlotNoLabel.setText("N/A");
+        paymentStatusLabel.setText("N/A");
         paymentAmountLabel.setText("N/A");
         receiptNoField.setText("");
-        recordPaymentButton.setEnabled(false);
+        attachReceiptButton.setEnabled(false);
+        paymentViewDocumentsButton.setEnabled(false);
+    }
+
+    private void loadSelectedPlanForDirectorDecisionDetails() {
+        int selectedRow = directorDecisionsTablePanel.getPlansTable().getSelectedRow();
+        if (selectedRow != -1) {
+            int planId = (int) directorDecisionsTablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            selectedPlanForDirectorDecision = Database.getPlanById(planId);
+
+            if (selectedPlanForDirectorDecision != null) {
+                directorPlanIdLabel.setText(String.valueOf(selectedPlanForDirectorDecision.getId()));
+                directorApplicantNameLabel.setText(selectedPlanForDirectorDecision.getApplicantName());
+                directorPlotNoLabel.setText(selectedPlanForDirectorDecision.getPlotNo());
+                directorStatusLabel.setText(selectedPlanForDirectorDecision.getStatus());
+
+                boolean isApprovedForStructural = selectedPlanForDirectorDecision.getStatus().equals("Approved by Director (to Reception for Structural)");
+                boolean isApprovedAwaitingClient = selectedPlanForDirectorDecision.getStatus().equals("Approved (Awaiting Client Pickup)");
+
+                forwardToStructuralButton.setEnabled(isApprovedForStructural);
+                releaseToClientButton.setEnabled(isApprovedAwaitingClient);
+                directorDecisionViewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
+            }
+        }
+    }
+
+    private void forwardToStructural() {
+        if (selectedPlanForDirectorDecision == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (!selectedPlanForDirectorDecision.getStatus().equals("Approved by Director (to Reception for Structural)")) {
+            JOptionPane.showMessageDialog(this, "This plan is not approved for structural review.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // --- NEW VALIDATION: Check for Director's Approval Letter ---
+        List<Document> documents = Database.getDocumentsByPlanId(selectedPlanForDirectorDecision.getId());
+        boolean directorLetterFound = documents.stream().anyMatch(doc ->
+            "Director's Approval Letter (Structural)".equals(doc.getDocName()) && "Generated".equals(doc.getDocumentType())
+        );
+
+        if (!directorLetterFound) {
+            JOptionPane.showMessageDialog(this, "Director's Approval Letter (Structural) not found. Cannot forward to Structural Department.", "Missing Document", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // --- END NEW VALIDATION ---
+
+        Database.updatePlanStatus(selectedPlanForDirectorDecision.getId(), "Under Review (Structural)", "Forwarded to Structural Department by Reception after Director's approval.");
+        Database.addLog(new Log(selectedPlanForDirectorDecision.getId(), currentUser.getRole(), "Structural", "Forwarded to Structural", "Director's approval letter attached."));
+
+        JOptionPane.showMessageDialog(this, "Plan forwarded to Structural Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        clearDirectorDecisionDetails();
+        refreshData();
+        parentDashboard.showRoleDashboard("Reception");
+    }
+
+    private void releaseToClient() {
+        if (selectedPlanForDirectorDecision == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (!selectedPlanForDirectorDecision.getStatus().equals("Approved (Awaiting Client Pickup)")) {
+            JOptionPane.showMessageDialog(this, "This plan is not awaiting client pickup.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Database.updatePlanStatus(selectedPlanForDirectorDecision.getId(), "Completed", "Plan released to client.");
+        Database.addLog(new Log(selectedPlanForDirectorDecision.getId(), currentUser.getRole(), "Client", "Plan Released", "Approval certificate provided to client."));
+
+        JOptionPane.showMessageDialog(this, "Plan released to client. Status updated to 'Completed'.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        clearDirectorDecisionDetails();
+        refreshData();
+        parentDashboard.showRoleDashboard("Reception");
+    }
+
+    private void clearDirectorDecisionDetails() {
+        selectedPlanForDirectorDecision = null;
+        directorPlanIdLabel.setText("N/A");
+        directorApplicantNameLabel.setText("N/A");
+        directorPlotNoLabel.setText("N/A");
+        directorStatusLabel.setText("N/A");
+        forwardToStructuralButton.setEnabled(false);
+        releaseToClientButton.setEnabled(false);
+        directorDecisionViewDocumentsButton.setEnabled(false);
+    }
+
+    private void loadSelectedPlanForClientCommunicationDetails() {
+        int selectedRow = clientCommunicationTablePanel.getPlansTable().getSelectedRow();
+        if (selectedRow != -1) {
+            int planId = (int) clientCommunicationTablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            selectedPlanForClientCommunication = Database.getPlanById(planId);
+
+            if (selectedPlanForClientCommunication != null) {
+                clientCommPlanIdLabel.setText(String.valueOf(selectedPlanForClientCommunication.getId()));
+                clientCommApplicantNameLabel.setText(selectedPlanForClientCommunication.getApplicantName());
+                clientCommPlotNoLabel.setText(selectedPlanForClientCommunication.getPlotNo());
+                clientCommStatusLabel.setText(selectedPlanForClientCommunication.getStatus());
+
+                boolean isRejectedForClient = selectedPlanForClientCommunication.getStatus().equals("Rejected (to Reception for Client)");
+                notifyClientButton.setEnabled(isRejectedForClient);
+                clientCommViewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
+            }
+        }
+    }
+
+    private void notifyClientAndMarkForResubmission() {
+        if (selectedPlanForClientCommunication == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (!selectedPlanForClientCommunication.getStatus().equals("Rejected (to Reception for Client)")) {
+            JOptionPane.showMessageDialog(this, "This plan is not awaiting client notification.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Database.updatePlanStatus(selectedPlanForClientCommunication.getId(), "Client Notified (Awaiting Resubmission)", "Client notified about rejection and requested to resubmit with revisions.");
+        Database.addLog(new Log(selectedPlanForClientCommunication.getId(), currentUser.getRole(), "Client", "Notified of Rejection", "Client needs to resubmit."));
+
+        JOptionPane.showMessageDialog(this, "Client notified about the rejected plan. Status updated to 'Client Notified (Awaiting Resubmission)'.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        clearClientCommunicationDetails();
+        refreshData();
+        parentDashboard.showRoleDashboard("Reception");
+    }
+
+    private void clearClientCommunicationDetails() {
+        selectedPlanForClientCommunication = null;
+        clientCommPlanIdLabel.setText("N/A");
+        clientCommApplicantNameLabel.setText("N/A");
+        clientCommPlotNoLabel.setText("N/A");
+        clientCommStatusLabel.setText("N/A");
+        notifyClientButton.setEnabled(false);
+        clientCommViewDocumentsButton.setEnabled(false);
+    }
+
+    private void viewPlanDocuments(Plan plan) {
+        if (plan == null) {
+            JOptionPane.showMessageDialog(this, "No plan selected.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        List<Document> documents = Database.getDocumentsByPlanId(plan.getId());
+        if (documents.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No documents found for this plan.", "Documents", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        StringBuilder docList = new StringBuilder("Documents for Plan ID: " + plan.getId() + "\n\n");
+        for (Document doc : documents) {
+            docList.append("Name: ").append(doc.getDocName())
+                   .append(" (Type: ").append(doc.getDocumentType()).append(")\n")
+                   .append("Path: ").append(doc.getFilePath() != null ? doc.getFilePath() : "N/A").append("\n\n");
+        }
+
+        JTextArea textArea = new JTextArea(docList.toString());
+        textArea.setEditable(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(500, 300));
+
+        JOptionPane.showMessageDialog(this, scrollPane, "Plan Documents", JOptionPane.PLAIN_MESSAGE);
     }
 
     @Override
     public void refreshData() {
-        // Update cards
-        int pendingReception = Database.getPlansByStatus("Submitted").size(); // Plans just submitted, potentially incomplete
-        int awaitingPayment = Database.getPlansByStatus("Awaiting Payment").size();
-        int forwardedToPlanning = Database.getPlansByStatus("Under Review (Planning)").size();
+        // Update cards (placeholder counts)
+        int pending = Database.getPlansByStatus("Under Review (Planning)").size() + Database.getPlansByStatus("Awaiting Payment").size();
+        int approved = Database.getPlansByStatus("Approved").size() + Database.getPlansByStatus("Approved (Awaiting Client Pickup)").size();
+        int deferred = Database.getPlansByStatus("Deferred").size() + Database.getPlansByStatus("Rejected").size() + Database.getPlansByStatus("Rejected (to Planning)").size() + Database.getPlansByStatus("Deferred (to Planning)").size();
+        int directorApprovedToReception = Database.getPlansByStatus("Approved by Director (to Reception for Structural)").size() + Database.getPlansByStatus("Approved (Awaiting Client Pickup)").size();
+        int rejectedForClientComm = Database.getPlansByStatus("Rejected (to Reception for Client)").size();
 
-        cardsPanel.updateCard(0, "New Submissions", pendingReception, new Color(255, 193, 7)); // Yellow
-        cardsPanel.updateCard(1, "Awaiting Payment", awaitingPayment, new Color(255, 165, 0)); // Orange
-        cardsPanel.updateCard(2, "Forwarded to Planning", forwardedToPlanning, new Color(40, 167, 69)); // Green
 
-        // Update 'Submitted Plans' table with plans relevant to Reception
-        List<Plan> receptionSubmittedPlans = new ArrayList<>();
-        receptionSubmittedPlans.addAll(Database.getPlansByStatus("Submitted"));
-        receptionSubmittedPlans.addAll(Database.getPlansByStatus("Under Review (Planning)")); // To see what's been forwarded
-        receptionSubmittedPlans.addAll(Database.getPlansByStatus("Awaiting Payment")); // Also show here for overview
-        receptionSubmittedPlans.addAll(Database.getPlansByStatus("Payment Received")); // And after payment
-        submittedPlansTablePanel.updateTable(receptionSubmittedPlans);
+        cardsPanel.updateCard(0, "Pending Plans", pending, new Color(255, 193, 7));
+        cardsPanel.updateCard(1, "Approved Plans", approved, new Color(40, 167, 69));
+        cardsPanel.updateCard(2, "Deferred/Returned", deferred + rejectedForClientComm, new Color(220, 53, 69));
 
-        // Update 'Payment Processing' table with plans specifically awaiting payment
-        List<Plan> plansAwaitingPayment = Database.getPlansByStatus("Awaiting Payment");
-        paymentPlansTablePanel.updateTable(plansAwaitingPayment);
+        // Update table with ALL plans for Reception
+        List<Plan> allPlans = Database.getAllPlans();
+        allPlansTablePanel.updateTable(allPlans);
 
-        // Clear details if no plan is selected or if selected plan is no longer relevant
-        if (selectedPlanForPayment != null && !plansAwaitingPayment.stream().anyMatch(p -> p.getId() == selectedPlanForPayment.getId())) {
+        // Update table for Payment Processing tab
+        List<Plan> awaitingPaymentPlans = Database.getPlansByStatus("Awaiting Payment");
+        paymentTablePanel.updateTable(awaitingPaymentPlans);
+
+        // Update table for Director Decisions tab
+        List<Plan> directorDecisionPlans = new ArrayList<>();
+        directorDecisionPlans.addAll(Database.getPlansByStatus("Approved by Director (to Reception for Structural)"));
+        directorDecisionPlans.addAll(Database.getPlansByStatus("Approved (Awaiting Client Pickup)"));
+        directorDecisionsTablePanel.updateTable(directorDecisionPlans);
+
+        // Update table for Client Communication tab
+        List<Plan> clientCommunicationPlans = Database.getPlansByStatus("Rejected (to Reception for Client)");
+        clientCommunicationTablePanel.updateTable(clientCommunicationPlans);
+
+
+        // Clear payment details if selected plan is no longer in "Awaiting Payment" list
+        if (selectedPlanForPayment != null && !awaitingPaymentPlans.stream().anyMatch(p -> p.getId() == selectedPlanForPayment.getId())) {
             clearPaymentDetails();
         } else if (selectedPlanForPayment != null) {
             // Re-load details for the currently selected plan to reflect any status changes
-            loadSelectedPlanForPayment();
+            loadSelectedPlanForPaymentDetails();
+        }
+
+        // Clear director decision details if selected plan is no longer relevant
+        if (selectedPlanForDirectorDecision != null && !directorDecisionPlans.stream().anyMatch(p -> p.getId() == selectedPlanForDirectorDecision.getId())) {
+            clearDirectorDecisionDetails();
+        } else if (selectedPlanForDirectorDecision != null) {
+            loadSelectedPlanForDirectorDecisionDetails();
+        }
+
+        // Clear client communication details if selected plan is no longer relevant
+        if (selectedPlanForClientCommunication != null && !clientCommunicationPlans.stream().anyMatch(p -> p.getId() == selectedPlanForClientCommunication.getId())) {
+            clearClientCommunicationDetails();
+        } else if (selectedPlanForClientCommunication != null) {
+            loadSelectedPlanForClientCommunicationDetails();
         }
     }
 }

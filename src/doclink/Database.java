@@ -43,12 +43,17 @@ public class Database {
                          "remarks TEXT)");
 
             // Create documents table
+            // Add document_type column if it doesn't exist
+            if (!columnExists(conn, "documents", "document_type")) {
+                stmt.execute("ALTER TABLE documents ADD COLUMN document_type TEXT DEFAULT 'Submitted'");
+            }
             stmt.execute("CREATE TABLE IF NOT EXISTS documents (" +
                          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                          "plan_id INTEGER NOT NULL," +
                          "doc_name TEXT NOT NULL," +
                          "file_path TEXT," +
                          "is_attached BOOLEAN NOT NULL," +
+                         "document_type TEXT NOT NULL DEFAULT 'Submitted'," + // Added document_type
                          "FOREIGN KEY (plan_id) REFERENCES plans(id))");
 
             // Create billing table
@@ -76,6 +81,12 @@ public class Database {
         } catch (SQLException e) {
             System.err.println("Error initializing database: " + e.getMessage());
         }
+    }
+
+    private static boolean columnExists(Connection conn, String tableName, String columnName) throws SQLException {
+        DatabaseMetaData md = conn.getMetaData();
+        ResultSet rs = md.getColumns(null, null, tableName, columnName);
+        return rs.next();
     }
 
     public static void addDemoUsers() {
@@ -122,7 +133,7 @@ public class Database {
 
     public static void addPlan(Plan plan, List<Document> documents) {
         String planSql = "INSERT INTO plans (applicant_name, contact, plot_no, location, date_submitted, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        String docSql = "INSERT INTO documents (plan_id, doc_name, file_path, is_attached) VALUES (?, ?, ?, ?)";
+        String docSql = "INSERT INTO documents (plan_id, doc_name, file_path, is_attached, document_type) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = connect();
              PreparedStatement planPstmt = conn.prepareStatement(planSql, Statement.RETURN_GENERATED_KEYS);
              PreparedStatement docPstmt = conn.prepareStatement(docSql)) {
@@ -148,6 +159,7 @@ public class Database {
                     docPstmt.setString(2, doc.getDocName());
                     docPstmt.setString(3, doc.getFilePath());
                     docPstmt.setBoolean(4, doc.isAttached());
+                    docPstmt.setString(5, doc.getDocumentType()); // Set document type
                     docPstmt.addBatch();
                 }
                 docPstmt.executeBatch();
@@ -162,6 +174,47 @@ public class Database {
                 System.err.println("Rollback error: " + ex.getMessage());
             }
         }
+    }
+
+    public static void addDocument(Document doc) {
+        String sql = "INSERT INTO documents (plan_id, doc_name, file_path, is_attached, document_type) VALUES (?, ?, ?, ?, ?)";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setInt(1, doc.getPlanId());
+            pstmt.setString(2, doc.getDocName());
+            pstmt.setString(3, doc.getFilePath());
+            pstmt.setBoolean(4, doc.isAttached());
+            pstmt.setString(5, doc.getDocumentType());
+            pstmt.executeUpdate();
+            ResultSet rs = pstmt.getGeneratedKeys();
+            if (rs.next()) {
+                doc.setId(rs.getInt(1));
+            }
+            System.out.println("Document '" + doc.getDocName() + "' added for plan " + doc.getPlanId());
+        } catch (SQLException e) {
+            System.err.println("Error adding document: " + e.getMessage());
+        }
+    }
+
+    public static List<Document> getDocumentsByPlanId(int planId) {
+        List<Document> documents = new ArrayList<>();
+        String sql = "SELECT id, plan_id, doc_name, file_path, is_attached, document_type FROM documents WHERE plan_id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, planId);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                documents.add(new Document(
+                    rs.getInt("id"),
+                    rs.getInt("plan_id"),
+                    rs.getString("doc_name"),
+                    rs.getString("file_path"),
+                    rs.getBoolean("is_attached"),
+                    rs.getString("document_type")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting documents by plan ID: " + e.getMessage());
+        }
+        return documents;
     }
 
     public static void updatePlanStatus(int planId, String newStatus, String remarks) {
@@ -265,27 +318,6 @@ public class Database {
         return null;
     }
 
-    public static List<Document> getDocumentsByPlanId(int planId) {
-        List<Document> documents = new ArrayList<>();
-        String sql = "SELECT id, plan_id, doc_name, file_path, is_attached FROM documents WHERE plan_id = ?";
-        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, planId);
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                documents.add(new Document(
-                    rs.getInt("id"),
-                    rs.getInt("plan_id"),
-                    rs.getString("doc_name"),
-                    rs.getString("file_path"),
-                    rs.getBoolean("is_attached")
-                ));
-            }
-        } catch (SQLException e) {
-            System.err.println("Error getting documents by plan ID: " + e.getMessage());
-        }
-        return documents;
-    }
-
     public static void updatePlanReferenceNo(int planId, String referenceNo) {
         String sql = "UPDATE plans SET reference_no = ? WHERE id = ?";
         try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -345,5 +377,56 @@ public class Database {
         } catch (SQLException e) {
             System.err.println("Error updating billing payment: " + e.getMessage());
         }
+    }
+
+    public static List<Plan> getPlansByApplicantEmailAndStatus(String email, String status) {
+        List<Plan> plans = new ArrayList<>();
+        String sql = "SELECT p.* FROM plans p JOIN users u ON p.applicant_name = u.name WHERE u.email = ? AND p.status = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+            pstmt.setString(2, status);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                plans.add(new Plan(
+                    rs.getInt("id"),
+                    rs.getString("applicant_name"),
+                    rs.getString("contact"),
+                    rs.getString("plot_no"),
+                    rs.getString("location"),
+                    LocalDate.parse(rs.getString("date_submitted")),
+                    rs.getString("reference_no"),
+                    rs.getString("status"),
+                    rs.getString("remarks")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting plans by applicant email and status: " + e.getMessage());
+        }
+        return plans;
+    }
+
+    public static List<Plan> getPlansByApplicantEmail(String email) {
+        List<Plan> plans = new ArrayList<>();
+        String sql = "SELECT p.* FROM plans p JOIN users u ON p.applicant_name = u.name WHERE u.email = ? ORDER BY p.date_submitted DESC";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, email);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                plans.add(new Plan(
+                    rs.getInt("id"),
+                    rs.getString("applicant_name"),
+                    rs.getString("contact"),
+                    rs.getString("plot_no"),
+                    rs.getString("location"),
+                    LocalDate.parse(rs.getString("date_submitted")),
+                    rs.getString("reference_no"),
+                    rs.getString("status"),
+                    rs.getString("remarks")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting plans by applicant email: " + e.getMessage());
+        }
+        return plans;
     }
 }

@@ -23,6 +23,7 @@ public class Dashboard extends JFrame {
     private static final Color LIGHT_GREY_BG = new Color(245, 247, 250);
     private static final Color PRIMARY_BLUE = new Color(0, 123, 255);
     private static final Color HOVER_BLUE = new Color(0, 100, 200);
+    private static final Color SIDEBAR_TEXT_COLOR = new Color(230, 230, 230); // Very light grey for better contrast
 
     public Dashboard(User user) {
         this.currentUser = user;
@@ -81,7 +82,7 @@ public class Dashboard extends JFrame {
         // App Logo
         JLabel appLogo = new JLabel("DocLink");
         appLogo.setFont(new Font("Segoe UI", Font.BOLD, 32));
-        appLogo.setForeground(Color.WHITE);
+        appLogo.setForeground(SIDEBAR_TEXT_COLOR); // Changed to SIDEBAR_TEXT_COLOR
         appLogo.setAlignmentX(Component.CENTER_ALIGNMENT);
         appLogo.setBorder(BorderFactory.createEmptyBorder(0, 0, 30, 0));
         sidebar.add(appLogo);
@@ -103,7 +104,7 @@ public class Dashboard extends JFrame {
     private void addSidebarButton(JPanel sidebar, String text, String actionCommand) {
         JButton button = new JButton(text);
         button.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        button.setForeground(Color.WHITE);
+        button.setForeground(SIDEBAR_TEXT_COLOR); // Changed to SIDEBAR_TEXT_COLOR
         button.setBackground(new Color(0,0,0,0)); // Transparent
         button.setFocusPainted(false);
         button.setBorderPainted(false);

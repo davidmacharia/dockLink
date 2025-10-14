@@ -9,12 +9,17 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import com.itextpdf.text.DocumentException; // Explicitly import DocumentException
+import java.io.File;
 
 public class ApprovalCertificateGenerator {
 
-    public static void generateCertificate(Plan plan, String filePath) {
+    public static String generateCertificate(Plan plan, String filePath) {
         Document document = new Document();
         try {
+            File dir = new File(System.getProperty("user.home") + "/DocLink_Documents/");
+            if (!dir.exists()) {
+                dir.mkdirs(); // Create the directory if it doesn't exist
+            }
             PdfWriter.getInstance(document, new FileOutputStream(filePath));
             document.open();
 
@@ -56,9 +61,11 @@ public class ApprovalCertificateGenerator {
 
             document.close();
             System.out.println("Approval Certificate generated successfully at: " + filePath);
+            return filePath;
 
         } catch (DocumentException | IOException e) {
             System.err.println("Error generating PDF certificate: " + e.getMessage());
+            return null;
         }
     }
 }
