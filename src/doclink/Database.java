@@ -1,14 +1,13 @@
 package doclink;
 
 import doclink.models.*;
-
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Database {
-    private static final String DB_URL = "jdbc:sqlite:doclink.db";
+    private static final String DB_URL = "jdbc:sqlite:data/doclink.db";
 
     public static Connection connect() {
         Connection conn = null;
@@ -43,10 +42,7 @@ public class Database {
                          "remarks TEXT)");
 
             // Create documents table
-            // Add document_type column if it doesn't exist
-            if (!columnExists(conn, "documents", "document_type")) {
-                stmt.execute("ALTER TABLE documents ADD COLUMN document_type TEXT DEFAULT 'Submitted'");
-            }
+            
             stmt.execute("CREATE TABLE IF NOT EXISTS documents (" +
                          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                          "plan_id INTEGER NOT NULL," +
