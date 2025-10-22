@@ -21,7 +21,7 @@ public class ClientNewPlanPanel extends JPanel implements Dashboard.Refreshable 
 
     // Form components
     private JLabel applicantNameLabel; // Will display currentUser.getName()
-    private JLabel contactLabel; // Will display currentUser.getEmail()
+    private JTextField contactField; // Changed to JTextField for manual input
     private JTextField plotNoField;
     private JTextField locationField;
     private JCheckBox sitePlanCb, titleDeedCb, drawingsCb, otherDocsCb;
@@ -59,65 +59,76 @@ public class ClientNewPlanPanel extends JPanel implements Dashboard.Refreshable 
         gbc.gridwidth = 2;
         panel.add(title, gbc);
 
-        // Applicant Details (pre-filled from current user)
-        gbc.gridy++;
-        gbc.gridwidth = 1;
+        // Applicant Details (pre-filled from current user) - Arranged side-by-side
+        gbc.gridwidth = 1; // Reset gridwidth for side-by-side
+        int row = 1;
+
+        gbc.gridx = 0;
+        gbc.gridy = row;
         panel.add(new JLabel("Applicant Name:"), gbc);
         gbc.gridx = 1;
         applicantNameLabel = new JLabel(currentUser.getName()); // Display user's name
         applicantNameLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         panel.add(applicantNameLabel, gbc);
 
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
-        panel.add(new JLabel("Contact Email:"), gbc);
+        gbc.gridy = row;
+        panel.add(new JLabel("Contact:"), gbc); // Changed label text
         gbc.gridx = 1;
-        contactLabel = new JLabel(currentUser.getEmail()); // Display user's email
-        contactLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        panel.add(contactLabel, gbc);
+        contactField = new JTextField(25); // Changed to JTextField
+        contactField.setText(currentUser.getEmail()); // Pre-fill with email, but allow editing
+        panel.add(contactField, gbc);
 
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         panel.add(new JLabel("Plot No:"), gbc);
         gbc.gridx = 1;
         plotNoField = new JTextField(25);
         panel.add(plotNoField, gbc);
 
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         panel.add(new JLabel("Location:"), gbc);
         gbc.gridx = 1;
         locationField = new JTextField(25);
         panel.add(locationField, gbc);
 
         // Document Checklist
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
-        gbc.gridwidth = 2;
+        gbc.gridy = row;
+        gbc.gridwidth = 2; // Span two columns for the title
         JLabel docTitle = new JLabel("Document Checklist:");
         docTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
         docTitle.setBorder(BorderFactory.createEmptyBorder(10, 0, 5, 0));
         panel.add(docTitle, gbc);
 
-        gbc.gridy++;
+        row++;
+        gbc.gridy = row;
+        JPanel checklistPanel = new JPanel(new GridLayout(0, 2, 10, 5)); // 2 columns, horizontal and vertical gap
+        checklistPanel.setOpaque(false); // Inherit background
         sitePlanCb = new JCheckBox("Site Plan");
-        panel.add(sitePlanCb, gbc);
-        gbc.gridy++;
         titleDeedCb = new JCheckBox("Title Deed");
-        panel.add(titleDeedCb, gbc);
-        gbc.gridy++;
         drawingsCb = new JCheckBox("Architectural Drawings");
-        panel.add(drawingsCb, gbc);
-        gbc.gridy++;
         otherDocsCb = new JCheckBox("Other Supporting Documents");
-        panel.add(otherDocsCb, gbc);
+        
+        checklistPanel.add(sitePlanCb);
+        checklistPanel.add(titleDeedCb);
+        checklistPanel.add(drawingsCb);
+        checklistPanel.add(otherDocsCb);
+        panel.add(checklistPanel, gbc); // Add the checklist panel
 
         // Remarks
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         gbc.gridwidth = 2;
         panel.add(new JLabel("Remarks:"), gbc);
-        gbc.gridy++;
+        row++;
+        gbc.gridy = row;
         remarksArea = new JTextArea(5, 25);
         remarksArea.setLineWrap(true);
         remarksArea.setWrapStyleWord(true);
@@ -125,14 +136,15 @@ public class ClientNewPlanPanel extends JPanel implements Dashboard.Refreshable 
         panel.add(scrollPane, gbc);
 
         // Submit Button
-        gbc.gridy++;
+        row++;
+        gbc.gridy = row;
         submitPlanButton = new JButton("Submit Plan");
         submitPlanButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
         submitPlanButton.setBackground(new Color(0, 123, 255));
         submitPlanButton.setForeground(Color.WHITE);
         submitPlanButton.setFocusPainted(false);
         submitPlanButton.setBorderPainted(false);
-        submitPlanButton.setOpaque(true); // Corrected: changed 'button' to 'submitPlanButton'
+        submitPlanButton.setOpaque(true);
         submitPlanButton.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         submitPlanButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         submitPlanButton.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -148,13 +160,13 @@ public class ClientNewPlanPanel extends JPanel implements Dashboard.Refreshable 
 
     private void submitNewPlan() {
         String applicantName = currentUser.getName(); // From current user
-        String contact = currentUser.getEmail(); // From current user
+        String contact = contactField.getText(); // Get from new JTextField
         String plotNo = plotNoField.getText();
         String location = locationField.getText();
         String remarks = remarksArea.getText();
 
-        if (plotNo.isEmpty() || location.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please fill in Plot No and Location.", "Input Error", JOptionPane.ERROR_MESSAGE);
+        if (plotNo.isEmpty() || location.isEmpty() || contact.isEmpty()) { // Added contact validation
+            JOptionPane.showMessageDialog(this, "Please fill in Plot No, Location, and Contact.", "Input Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -187,6 +199,7 @@ public class ClientNewPlanPanel extends JPanel implements Dashboard.Refreshable 
     }
 
     private void clearSubmissionForm() {
+        contactField.setText(currentUser.getEmail()); // Reset to default email, but still editable
         plotNoField.setText("");
         locationField.setText("");
         remarksArea.setText("");

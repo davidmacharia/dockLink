@@ -9,10 +9,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class LoginFrame extends JFrame {
-
     private JTextField emailField;
     private JPasswordField passwordField;
     private JButton loginButton;
+    private JCheckBox showPasswordCheckBox; // New checkbox
 
     public LoginFrame() {
         setTitle("DocLink - Login");
@@ -76,6 +76,29 @@ public class LoginFrame extends JFrame {
         gbc.gridy = 2;
         formPanel.add(passwordField, gbc);
 
+        // New: Show Password Checkbox
+        showPasswordCheckBox = new JCheckBox("Show Password");
+        showPasswordCheckBox.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        showPasswordCheckBox.setBackground(new Color(245, 247, 250));
+        showPasswordCheckBox.setFocusPainted(false);
+        gbc.gridx = 1; // Place it in the second column
+        gbc.gridy = 3; // Below the password field
+        gbc.gridwidth = 1; // Only one column wide
+        gbc.anchor = GridBagConstraints.EAST; // Align to the right
+        gbc.insets = new Insets(0, 10, 10, 10); // Adjust top padding to be closer to password field
+        formPanel.add(showPasswordCheckBox, gbc);
+
+        showPasswordCheckBox.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (showPasswordCheckBox.isSelected()) {
+                    passwordField.setEchoChar((char) 0); // Show characters
+                } else {
+                    passwordField.setEchoChar('*'); // Hide characters
+                }
+            }
+        });
+
         loginButton = new JButton("Login");
         loginButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
         loginButton.setBackground(new Color(0, 123, 255)); // Primary blue
@@ -90,16 +113,16 @@ public class LoginFrame extends JFrame {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 loginButton.setBackground(new Color(0, 100, 200)); // Darker blue on hover
             }
-
             public void mouseExited(java.awt.event.MouseEvent evt) {
                 loginButton.setBackground(new Color(0, 123, 255));
             }
         });
 
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4; // Adjusted gridy to accommodate the new checkbox
         gbc.gridwidth = 2;
         gbc.insets = new Insets(20, 10, 10, 10); // Top padding
+        gbc.anchor = GridBagConstraints.CENTER; // Center the button
         formPanel.add(loginButton, gbc);
 
         loginButton.addActionListener(new ActionListener() {
@@ -120,6 +143,10 @@ public class LoginFrame extends JFrame {
         User user = Database.authenticateUser(email, password);
 
         if (user != null) {
+            if (user.getRole().equals("Blocked")) {
+                JOptionPane.showMessageDialog(this, "Your account has been blocked. Please contact an administrator.", "Login Failed", JOptionPane.ERROR_MESSAGE);
+                return; // Prevent login for blocked users
+            }
             JOptionPane.showMessageDialog(this, "Login successful! Welcome, " + user.getName(), "Success", JOptionPane.INFORMATION_MESSAGE);
             dispose(); // Close login window
             Dashboard dashboard = new Dashboard(user);

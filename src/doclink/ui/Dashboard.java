@@ -1,11 +1,18 @@
 package doclink.ui;
 
 import doclink.models.User;
+import doclink.ui.panels.admin.AdminDashboardPanel; // New import
+import doclink.ui.panels.admin.AdminRejectedPlansPanel; // New import
+import doclink.ui.panels.admin.AdminUserManagementPanel; // New import
 import doclink.ui.panels.client.ClientDashboardPanel;
-import doclink.ui.panels.client.ClientNewPlanPanel; // New import
+import doclink.ui.panels.client.ClientNewPlanPanel;
 import doclink.ui.panels.committee.CommitteeReviewPanel;
+import doclink.ui.panels.director.DirectorAllPlansPanel;
 import doclink.ui.panels.director.DirectorReviewPanel;
+import doclink.ui.panels.director.DirectorReportsPanel;
+import doclink.ui.panels.planning.PlanningFilesPanel;
 import doclink.ui.panels.planning.PlanningReviewPanel;
+import doclink.ui.panels.planning.PlanningReportsPanel;
 import doclink.ui.panels.reception.ReceptionAllPlansPanel;
 import doclink.ui.panels.reception.ReceptionClientCommunicationPanel;
 import doclink.ui.panels.reception.ReceptionDirectorDecisionsPanel;
@@ -49,45 +56,38 @@ public class Dashboard extends JFrame {
         setLocationRelativeTo(null);
 
         JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.setBackground(LIGHT_GREY_BG); // Reverted to light grey
+        mainPanel.setBackground(LIGHT_GREY_BG);
 
-        // Add the HeaderPanel to the NORTH of the mainPanel
         headerPanel = new HeaderPanel();
         mainPanel.add(headerPanel, BorderLayout.NORTH);
 
-        // This panel will now hold the sidebar (WEST) and the rest of the dashboard content (CENTER)
         JPanel dashboardMainContent = new JPanel(new BorderLayout());
-        dashboardMainContent.setBackground(LIGHT_GREY_BG); // Reverted to light grey
+        dashboardMainContent.setBackground(LIGHT_GREY_BG);
 
-        // Sidebar
         JPanel sidebar = createSidebar();
         dashboardMainContent.add(sidebar, BorderLayout.WEST);
 
-        // This panel will hold the cards (NORTH) and the functional panels (CENTER)
         JPanel rightHandContentPanel = new JPanel(new BorderLayout());
-        rightHandContentPanel.setBackground(LIGHT_GREY_BG); // Reverted to light grey
+        rightHandContentPanel.setBackground(LIGHT_GREY_BG);
 
-        // Centralized Cards Panel at the top of the right-hand content
         cardsPanel = new DashboardCardsPanel();
         rightHandContentPanel.add(cardsPanel, BorderLayout.NORTH);
 
-        // Functional content panel with CardLayout
         cardLayout = new CardLayout();
-        contentPanel = new JPanel(cardLayout); // This is the panel that holds the actual views
-        contentPanel.setBackground(LIGHT_GREY_BG); // Reverted to light grey
+        contentPanel = new JPanel(cardLayout);
+        contentPanel.setBackground(LIGHT_GREY_BG);
 
-        functionalPanels = new LinkedHashMap<>(); // Use LinkedHashMap to maintain insertion order for sidebar buttons
+        functionalPanels = new LinkedHashMap<>();
         refreshablePanels = new HashMap<>();
 
-        initializeAllPanels(); // Initialize all panels and add them to contentPanel
+        initializeAllPanels();
 
-        rightHandContentPanel.add(contentPanel, BorderLayout.CENTER); // Functional panels are in the center of rightHandContentPanel
-        dashboardMainContent.add(rightHandContentPanel, BorderLayout.CENTER); // rightHandContentPanel is in the center of dashboardMainContent
-        mainPanel.add(dashboardMainContent, BorderLayout.CENTER); // dashboardMainContent is in the center of mainPanel
+        rightHandContentPanel.add(contentPanel, BorderLayout.CENTER);
+        dashboardMainContent.add(rightHandContentPanel, BorderLayout.CENTER);
+        mainPanel.add(dashboardMainContent, BorderLayout.CENTER);
 
         add(mainPanel);
 
-        // Show the default panel for the current user's role
         showDefaultRolePanel(currentUser.getRole());
     }
 
@@ -106,7 +106,6 @@ public class Dashboard extends JFrame {
         sidebar.setPreferredSize(new Dimension(250, 0));
         sidebar.setBorder(BorderFactory.createEmptyBorder(20, 15, 20, 15));
 
-        // App Logo
         JLabel appLogo = new JLabel("DocLink");
         appLogo.setFont(new Font("Segoe UI", Font.BOLD, 32));
         appLogo.setForeground(Color.WHITE);
@@ -114,7 +113,6 @@ public class Dashboard extends JFrame {
         appLogo.setBorder(BorderFactory.createEmptyBorder(0, 0, 30, 0));
         sidebar.add(appLogo);
 
-        // Add role-specific menu items
         switch (currentUser.getRole()) {
             case "Reception":
                 addSidebarButton(sidebar, "New Plan Submission", "ReceptionSubmissionPanel");
@@ -125,30 +123,34 @@ public class Dashboard extends JFrame {
                 break;
             case "Planning":
                 addSidebarButton(sidebar, "Plan Review", "PlanningReviewPanel");
-                addSidebarButton(sidebar, "Files", "PlanningFilesPanel"); // Placeholder
-                addSidebarButton(sidebar, "Reports", "PlanningReportsPanel"); // Placeholder
+                addSidebarButton(sidebar, "Files", "PlanningFilesPanel");
+                addSidebarButton(sidebar, "Reports", "PlanningReportsPanel");
                 break;
             case "Committee":
                 addSidebarButton(sidebar, "Plan Review", "CommitteeReviewPanel");
-                addSidebarButton(sidebar, "Meetings", "CommitteeMeetingsPanel"); // Placeholder
+                addSidebarButton(sidebar, "Meetings", "CommitteeMeetingsPanel");
                 break;
             case "Director":
                 addSidebarButton(sidebar, "Plan Review", "DirectorReviewPanel");
-                addSidebarButton(sidebar, "User Management", "DirectorUserManagementPanel"); // Placeholder
-                addSidebarButton(sidebar, "Reports", "DirectorReportsPanel"); // Placeholder
+                addSidebarButton(sidebar, "All Plans Overview", "DirectorAllPlansPanel");
+                addSidebarButton(sidebar, "Reports", "DirectorReportsPanel");
                 break;
             case "Structural":
                 addSidebarButton(sidebar, "Structural Review", "StructuralReviewPanel");
-                addSidebarButton(sidebar, "Calculations", "StructuralCalculationsPanel"); // Placeholder
+                addSidebarButton(sidebar, "Calculations", "StructuralCalculationsPanel");
                 break;
             case "Client":
                 addSidebarButton(sidebar, "My Plans", "ClientDashboardPanel");
-                addSidebarButton(sidebar, "Submit New Plan", "ClientNewPlanPanel"); // Placeholder
+                addSidebarButton(sidebar, "Submit New Plan", "ClientNewPlanPanel");
+                break;
+            case "Admin": // New Admin Role
+                addSidebarButton(sidebar, "Dashboard", "AdminDashboardPanel");
+                addSidebarButton(sidebar, "User Management", "AdminUserManagementPanel");
+                addSidebarButton(sidebar, "Rejected Plans", "AdminRejectedPlansPanel");
                 break;
         }
 
-        // Common items
-        addSidebarButton(sidebar, "Settings", "SettingsPanel"); // Placeholder
+        addSidebarButton(sidebar, "Settings", "SettingsPanel");
         addSidebarButton(sidebar, "Logout", "Logout");
 
         return sidebar;
@@ -157,33 +159,32 @@ public class Dashboard extends JFrame {
     private void addSidebarButton(JPanel sidebar, String text, String panelName) {
         JButton button = new JButton(text);
         button.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        button.setForeground(Color.WHITE); // Default text color
+        button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(false);
-        button.setContentAreaFilled(false); // <--- Set to false initially for transparency
-        button.setOpaque(false); // Keep opaque false so gradient shows through by default
+        button.setContentAreaFilled(false);
+        button.setOpaque(false);
         button.setAlignmentX(Component.CENTER_ALIGNMENT);
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50)); // Make button fill width
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15)); // Initial border is empty
+        button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
 
-        // Store default background color (transparent)
-        Color defaultBg = new Color(0,0,0,0); // Fully transparent
+        Color defaultBg = new Color(0,0,0,0);
 
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setForeground(new Color(200, 200, 255)); // Lighter text on hover
-                button.setBorder(BorderFactory.createLineBorder(Color.WHITE, 1)); // Add white border on hover
-                button.setBackground(ROYAL_BLUE); // Set hover background color to opaque ROYAL_BLUE
-                button.setOpaque(true); // Make it opaque to show the background color
-                button.setContentAreaFilled(true); // <--- Set to true on hover
+                button.setForeground(new Color(200, 200, 255));
+                button.setBorder(BorderFactory.createLineBorder(Color.WHITE, 1));
+                button.setBackground(ROYAL_BLUE);
+                button.setOpaque(true);
+                button.setContentAreaFilled(true);
             }
             public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setForeground(Color.WHITE); // Revert text color
-                button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15)); // Remove border on exit
-                button.setBackground(defaultBg); // Revert background to transparent
-                button.setOpaque(false); // Make it non-opaque again
-                button.setContentAreaFilled(false); // <--- Set to false on exit
+                button.setForeground(Color.WHITE);
+                button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+                button.setBackground(defaultBg);
+                button.setOpaque(false);
+                button.setContentAreaFilled(false);
             }
         });
 
@@ -222,30 +223,38 @@ public class Dashboard extends JFrame {
         PlanningReviewPanel planningReviewPanel = new PlanningReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("PlanningReviewPanel", planningReviewPanel);
         refreshablePanels.put("PlanningReviewPanel", planningReviewPanel);
-        // Add placeholders for other Planning panels
-        functionalPanels.put("PlanningFilesPanel", createPlaceholderPanel("Planning Files View"));
-        functionalPanels.put("PlanningReportsPanel", createPlaceholderPanel("Planning Reports View"));
+        
+        PlanningFilesPanel planningFilesPanel = new PlanningFilesPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("PlanningFilesPanel", planningFilesPanel);
+        refreshablePanels.put("PlanningFilesPanel", planningFilesPanel);
+
+        PlanningReportsPanel planningReportsPanel = new PlanningReportsPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("PlanningReportsPanel", planningReportsPanel);
+        refreshablePanels.put("PlanningReportsPanel", planningReportsPanel);
 
         // Committee Panels
         CommitteeReviewPanel committeeReviewPanel = new CommitteeReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("CommitteeReviewPanel", committeeReviewPanel);
         refreshablePanels.put("CommitteeReviewPanel", committeeReviewPanel);
-        // Add placeholders for other Committee panels
         functionalPanels.put("CommitteeMeetingsPanel", createPlaceholderPanel("Committee Meetings View"));
 
         // Director Panels
         DirectorReviewPanel directorReviewPanel = new DirectorReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("DirectorReviewPanel", directorReviewPanel);
         refreshablePanels.put("DirectorReviewPanel", directorReviewPanel);
-        // Add placeholders for other Director panels
-        functionalPanels.put("DirectorUserManagementPanel", createPlaceholderPanel("Director User Management View"));
-        functionalPanels.put("DirectorReportsPanel", createPlaceholderPanel("Director Reports View"));
+        
+        DirectorAllPlansPanel directorAllPlansPanel = new DirectorAllPlansPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("DirectorAllPlansPanel", directorAllPlansPanel);
+        refreshablePanels.put("DirectorAllPlansPanel", directorAllPlansPanel);
+
+        DirectorReportsPanel directorReportsPanel = new DirectorReportsPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("DirectorReportsPanel", directorReportsPanel);
+        refreshablePanels.put("DirectorReportsPanel", directorReportsPanel);
 
         // Structural Panels
         StructuralReviewPanel structuralReviewPanel = new StructuralReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("StructuralReviewPanel", structuralReviewPanel);
         refreshablePanels.put("StructuralReviewPanel", structuralReviewPanel);
-        // Add placeholders for other Structural panels
         functionalPanels.put("StructuralCalculationsPanel", createPlaceholderPanel("Structural Calculations View"));
 
         // Client Panels
@@ -253,14 +262,26 @@ public class Dashboard extends JFrame {
         functionalPanels.put("ClientDashboardPanel", clientDashboardPanel);
         refreshablePanels.put("ClientDashboardPanel", clientDashboardPanel);
         
-        ClientNewPlanPanel clientNewPlanPanel = new ClientNewPlanPanel(currentUser, this, cardsPanel); // Instantiate new panel
-        functionalPanels.put("ClientNewPlanPanel", clientNewPlanPanel); // Add to map
-        refreshablePanels.put("ClientNewPlanPanel", clientNewPlanPanel); // Add to refreshable map
+        ClientNewPlanPanel clientNewPlanPanel = new ClientNewPlanPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("ClientNewPlanPanel", clientNewPlanPanel);
+        refreshablePanels.put("ClientNewPlanPanel", clientNewPlanPanel);
+
+        // Admin Panels (New)
+        AdminDashboardPanel adminDashboardPanel = new AdminDashboardPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("AdminDashboardPanel", adminDashboardPanel);
+        refreshablePanels.put("AdminDashboardPanel", adminDashboardPanel);
+
+        AdminUserManagementPanel adminUserManagementPanel = new AdminUserManagementPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("AdminUserManagementPanel", adminUserManagementPanel);
+        refreshablePanels.put("AdminUserManagementPanel", adminUserManagementPanel);
+
+        AdminRejectedPlansPanel adminRejectedPlansPanel = new AdminRejectedPlansPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
+        refreshablePanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
 
         // Common Panels
         functionalPanels.put("SettingsPanel", createPlaceholderPanel("Settings View"));
 
-        // Add all panels to the CardLayout
         for (Map.Entry<String, JPanel> entry : functionalPanels.entrySet()) {
             contentPanel.add(entry.getValue(), entry.getKey());
         }
@@ -268,10 +289,10 @@ public class Dashboard extends JFrame {
 
     private JPanel createPlaceholderPanel(String text) {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(LIGHT_GREY_BG); // Reverted to light grey
+        panel.setBackground(LIGHT_GREY_BG);
         JLabel label = new JLabel(text);
         label.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        label.setForeground(DARK_NAVY); // Kept DARK_NAVY for title contrast
+        label.setForeground(DARK_NAVY);
         panel.add(label);
         return panel;
     }
@@ -289,7 +310,7 @@ public class Dashboard extends JFrame {
                 defaultPanelName = "CommitteeReviewPanel";
                 break;
             case "Director":
-                defaultPanelName = "DirectorReviewPanel";
+                defaultPanelName = "DirectorReviewPanel"; // Default to review panel
                 break;
             case "Structural":
                 defaultPanelName = "StructuralReviewPanel";
@@ -297,8 +318,11 @@ public class Dashboard extends JFrame {
             case "Client":
                 defaultPanelName = "ClientDashboardPanel";
                 break;
+            case "Admin": // New Admin Default
+                defaultPanelName = "AdminDashboardPanel";
+                break;
             default:
-                defaultPanelName = "SettingsPanel"; // Fallback
+                defaultPanelName = "SettingsPanel";
                 break;
         }
         handleSidebarAction(defaultPanelName);
@@ -313,7 +337,6 @@ public class Dashboard extends JFrame {
                 loginFrame.setVisible(true);
             }
         } else {
-            // Refresh the data for the target panel before showing it
             Refreshable refreshablePanel = refreshablePanels.get(panelName);
             if (refreshablePanel != null) {
                 refreshablePanel.refreshData();
@@ -322,12 +345,10 @@ public class Dashboard extends JFrame {
         }
     }
 
-    // New method to allow panels to trigger a dashboard view change and refresh
     public void showRoleDashboard(String role) {
         showDefaultRolePanel(role);
     }
 
-    // Interface for panels that need to refresh their data
     public interface Refreshable {
         void refreshData();
     }

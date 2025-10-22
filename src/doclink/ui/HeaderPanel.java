@@ -27,7 +27,7 @@ public class HeaderPanel extends JPanel {
         add(appTitle, BorderLayout.CENTER);
 
         // Right: Hamburger Menu
-        menuButton = new JButton(new ImageIcon(createScaledIcon("src/doclink/resources/menu_icon.png", 24, 24))); // Placeholder icon
+        menuButton = new JButton(new ImageIcon(createScaledIcon("src/doclink/resources/icon.jpg", 24, 24))); // Placeholder icon
         menuButton.setBorderPainted(false);
         menuButton.setContentAreaFilled(false);
         menuButton.setFocusPainted(false);

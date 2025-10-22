@@ -1,7 +1,9 @@
 package doclink.ui.panels.reception;
 
 import doclink.Database;
+import doclink.models.Billing;
 import doclink.models.Document;
+import doclink.models.Log;
 import doclink.models.Plan;
 import doclink.models.User;
 import doclink.ui.Dashboard;
@@ -9,9 +11,10 @@ import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
 
 import javax.swing.*;
-import javax.swing.event.ListSelectionEvent; // Added import
-import javax.swing.event.ListSelectionListener; // Added import
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +27,9 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
 
     // Plan details panel components
     private JLabel planIdLabel, applicantNameLabel, plotNoLabel, statusLabel;
-    private JButton viewDocumentsButton;
+    private JTextArea remarksArea; // Added for general remarks
+    private JTextField billingAmountField; // Added for billing
+    private JButton viewDocumentsButton, forwardToPlanningButton, createBillingAndForwardButton; // New action buttons
     private Plan selectedPlan;
     private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
 
@@ -69,7 +74,7 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.anchor = GridBagConstraints.WEST;
 
-        JLabel title = new JLabel("Plan Details");
+        JLabel title = new JLabel("Plan Details & Actions");
         title.setFont(new Font("Segoe UI", Font.BOLD, 20));
         title.setForeground(DARK_NAVY);
         gbc.gridx = 0;
@@ -104,6 +109,40 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
         gbc.gridx = 1;
         statusLabel = new JLabel("N/A");
         panel.add(statusLabel, gbc);
+
+        // Remarks for action
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("Remarks for Action:"), gbc);
+        gbc.gridy++;
+        remarksArea = new JTextArea(3, 20);
+        remarksArea.setLineWrap(true);
+        remarksArea.setWrapStyleWord(true);
+        JScrollPane scrollPaneRemarks = new JScrollPane(remarksArea);
+        panel.add(scrollPaneRemarks, gbc);
+
+        // Billing Amount (visible only when needed)
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 1;
+        panel.add(new JLabel("Billing Amount:"), gbc);
+        gbc.gridx = 1;
+        billingAmountField = new JTextField(15);
+        panel.add(billingAmountField, gbc);
+
+        // Action Buttons
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        forwardToPlanningButton = createStyledButton("Forward to Planning", new Color(0, 123, 255)); // Blue
+        forwardToPlanningButton.addActionListener(e -> forwardToPlanning());
+        panel.add(forwardToPlanningButton, gbc);
+
+        gbc.gridy++;
+        createBillingAndForwardButton = createStyledButton("Create Billing & Forward to Payment", new Color(255, 165, 0)); // Orange
+        createBillingAndForwardButton.addActionListener(e -> createBillingAndForward());
+        panel.add(createBillingAndForwardButton, gbc);
 
         // View Documents Button
         gbc.gridx = 0;
@@ -155,9 +194,52 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
                 applicantNameLabel.setText(selectedPlan.getApplicantName());
                 plotNoLabel.setText(selectedPlan.getPlotNo());
                 statusLabel.setText(selectedPlan.getStatus());
-                viewDocumentsButton.setEnabled(true); // Enable view documents if a plan is selected
+                remarksArea.setText(""); // Clear remarks for new action
+                billingAmountField.setText(""); // Clear billing amount
+
+                viewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
+
+                // Enable/disable action buttons based on status
+                boolean isSubmitted = selectedPlan.getStatus().equals("Submitted");
+                forwardToPlanningButton.setEnabled(isSubmitted);
+                // Disable billing options for 'Submitted' plans, as billing is determined by Planning
+                createBillingAndForwardButton.setEnabled(false);
+                billingAmountField.setEnabled(false);
             }
         }
+    }
+
+    private void forwardToPlanning() {
+        if (selectedPlan == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (!selectedPlan.getStatus().equals("Submitted")) {
+            JOptionPane.showMessageDialog(this, "This plan is not in 'Submitted' status and cannot be forwarded directly to Planning.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String remarks = remarksArea.getText().trim();
+        Database.updatePlanStatus(selectedPlan.getId(), "Under Review (Planning)", "Forwarded to Planning by Reception. " + remarks);
+        Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Forwarded for Review (No Billing)", remarks));
+
+        JOptionPane.showMessageDialog(this, "Plan forwarded to Planning Department successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        clearDetails();
+        refreshData();
+    }
+
+    private void createBillingAndForward() {
+        // This method should ideally not be reachable for 'Submitted' plans due to UI disabling.
+        // However, keeping the logic here for completeness if the status changes unexpectedly.
+        if (selectedPlan == null) {
+            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // This action is now expected to be triggered by Planning, not initial Reception review.
+        // If a plan somehow reaches this state and needs billing from Reception, it would be an edge case.
+        // For the defined workflow, this button is disabled for 'Submitted' plans.
+        JOptionPane.showMessageDialog(this, "Billing is determined by the Planning Department. Please forward the plan to Planning first.", "Workflow Information", JOptionPane.INFORMATION_MESSAGE);
+        return;
     }
 
     private void viewPlanDocuments(Plan plan) {
@@ -195,6 +277,11 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
         applicantNameLabel.setText("N/A");
         plotNoLabel.setText("N/A");
         statusLabel.setText("N/A");
+        remarksArea.setText("");
+        billingAmountField.setText("");
+        forwardToPlanningButton.setEnabled(false);
+        createBillingAndForwardButton.setEnabled(false);
+        billingAmountField.setEnabled(false);
         viewDocumentsButton.setEnabled(false);
     }
 
@@ -219,7 +306,8 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
                                  Database.getPlansByStatus("Rejected by Structural (to Planning)").size() +
                                  Database.getPlansByStatus("Deferred by Structural (Awaiting Clarification)").size() +
                                  Database.getPlansByStatus("Rejected (to Reception for Client)").size() +
-                                 Database.getPlansByStatus("Client Notified (Awaiting Resubmission)").size();
+                                 Database.getPlansByApplicantEmailAndStatus(currentUser.getEmail(), "Client Notified (Awaiting Resubmission)").size(); // Corrected to use currentUser.getEmail() for client-specific count
+
 
         cardsPanel.updateCard(0, "Total Pending", pending, new Color(255, 193, 7)); // Yellow
         cardsPanel.updateCard(1, "Total Approved", approved, new Color(40, 167, 69)); // Green

@@ -1,13 +1,14 @@
 package doclink;
 
 import doclink.models.*;
+
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Database {
-    private static final String DB_URL = "jdbc:sqlite:data/doclink.db";
+    private static final String DB_URL = "jdbc:sqlite:doclink.db";
 
     public static Connection connect() {
         Connection conn = null;
@@ -27,7 +28,7 @@ public class Database {
                          "name TEXT NOT NULL," +
                          "email TEXT UNIQUE NOT NULL," +
                          "password TEXT NOT NULL," +
-                         "role TEXT NOT NULL)"); // Reception, Planning, Committee, Director, Structural, Client
+                         "role TEXT NOT NULL)"); // Reception, Planning, Committee, Director, Structural, Client, Admin
 
             // Create plans table
             stmt.execute("CREATE TABLE IF NOT EXISTS plans (" +
@@ -41,8 +42,7 @@ public class Database {
                          "status TEXT NOT NULL," + // e.g., Submitted, Awaiting Payment, Under Review (Planning), Under Review (Committee), Under Review (Director), Under Review (Structural), Approved, Rejected, Deferred
                          "remarks TEXT)");
 
-            // Create documents table
-            
+            // Create documents table first
             stmt.execute("CREATE TABLE IF NOT EXISTS documents (" +
                          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                          "plan_id INTEGER NOT NULL," +
@@ -51,6 +51,12 @@ public class Database {
                          "is_attached BOOLEAN NOT NULL," +
                          "document_type TEXT NOT NULL DEFAULT 'Submitted'," + // Added document_type
                          "FOREIGN KEY (plan_id) REFERENCES plans(id))");
+
+            // Then, add document_type column if it doesn't exist (this check is now redundant if the table is always created with it, but good for robustness)
+            // However, keeping it for now as it was part of the original intent.
+            if (!columnExists(conn, "documents", "document_type")) {
+                stmt.execute("ALTER TABLE documents ADD COLUMN document_type TEXT DEFAULT 'Submitted'");
+            }
 
             // Create billing table
             stmt.execute("CREATE TABLE IF NOT EXISTS billing (" +
@@ -96,7 +102,8 @@ public class Database {
                 {"Committee Member", "committee@doclink.com", "password", "Committee"},
                 {"Director", "director@doclink.com", "password", "Director"},
                 {"Structural Engineer", "structural@doclink.com", "password", "Structural"},
-                {"Client User", "client@doclink.com", "password", "Client"}
+                {"Client User", "client@doclink.com", "password", "Client"},
+                {"Admin User", "admin@doclink.com", "password", "Admin"} // New Admin User
             };
 
             for (String[] user : users) {
@@ -242,6 +249,29 @@ public class Database {
         }
     }
 
+    public static List<Log> getRecentLogs(int limit) {
+        List<Log> logs = new ArrayList<>();
+        String sql = "SELECT id, plan_id, from_role, to_role, action, remarks, date FROM logs ORDER BY date DESC, id DESC LIMIT ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, limit);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                logs.add(new Log(
+                    rs.getInt("id"),
+                    rs.getInt("plan_id"),
+                    rs.getString("from_role"),
+                    rs.getString("to_role"),
+                    rs.getString("action"),
+                    rs.getString("remarks"),
+                    LocalDate.parse(rs.getString("date"))
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting recent logs: " + e.getMessage());
+        }
+        return logs;
+    }
+
     public static List<Plan> getPlansByStatus(String status) {
         List<Plan> plans = new ArrayList<>();
         String sql = "SELECT * FROM plans WHERE status = ?";
@@ -314,15 +344,21 @@ public class Database {
         return null;
     }
 
-    public static void updatePlanReferenceNo(int planId, String referenceNo) {
+    public static boolean updatePlanReferenceNo(int planId, String referenceNo) {
         String sql = "UPDATE plans SET reference_no = ? WHERE id = ?";
         try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, referenceNo);
             pstmt.setInt(2, planId);
-            pstmt.executeUpdate();
-            System.out.println("Plan " + planId + " reference number updated to " + referenceNo);
+            int rowsAffected = pstmt.executeUpdate();
+            System.out.println("Database: updatePlanReferenceNo - Plan " + planId + " reference number updated to " + referenceNo + ". Rows affected: " + rowsAffected);
+            return rowsAffected > 0;
         } catch (SQLException e) {
-            System.err.println("Error updating plan reference number: " + e.getMessage());
+            System.err.println("Database: Error updating plan reference number: " + e.getMessage());
+            // Check for unique constraint violation specifically
+            if (e.getMessage().contains("UNIQUE constraint failed: plans.reference_no")) {
+                return false; // Indicate failure due to unique constraint
+            }
+            return false; // General failure
         }
     }
 
@@ -362,16 +398,21 @@ public class Database {
         return null;
     }
 
-    public static void updateBillingPayment(int billingId, String receiptNo) {
+    public static boolean updateBillingPayment(int billingId, String receiptNo) {
         String sql = "UPDATE billing SET receipt_no = ?, date_paid = ? WHERE id = ?";
         try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, receiptNo);
             pstmt.setString(2, LocalDate.now().toString());
             pstmt.setInt(3, billingId);
-            pstmt.executeUpdate();
-            System.out.println("Billing " + billingId + " marked as paid.");
+            int rowsAffected = pstmt.executeUpdate();
+            System.out.println("Billing " + billingId + " marked as paid with receipt " + receiptNo);
+            return rowsAffected > 0;
         } catch (SQLException e) {
             System.err.println("Error updating billing payment: " + e.getMessage());
+            if (e.getMessage().contains("UNIQUE constraint failed: billing.receipt_no")) {
+                return false; // Indicate failure due to unique receipt number
+            }
+            return false; // General failure
         }
     }
 
@@ -424,5 +465,115 @@ public class Database {
             System.err.println("Error getting plans by applicant email: " + e.getMessage());
         }
         return plans;
+    }
+
+    // --- New Admin Panel Database Methods ---
+
+    public static List<User> getAllUsers() {
+        List<User> users = new ArrayList<>();
+        String sql = "SELECT id, name, email, role FROM users ORDER BY name";
+        try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                users.add(new User(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("email"),
+                    rs.getString("role")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting all users: " + e.getMessage());
+        }
+        return users;
+    }
+
+    public static boolean addUser(String name, String email, String password, String role) {
+        String sql = "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, name);
+            pstmt.setString(2, email);
+            pstmt.setString(3, password);
+            pstmt.setString(4, role);
+            pstmt.executeUpdate();
+            System.out.println("User '" + name + "' added successfully.");
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error adding user: " + e.getMessage());
+            // The calling UI component will handle displaying the message
+            return false;
+        }
+    }
+
+    public static boolean deleteUser(int userId) {
+        String sql = "DELETE FROM users WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, userId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("User " + userId + " deleted successfully.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error deleting user: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static boolean updateUserRole(int userId, String newRole) {
+        String sql = "UPDATE users SET role = ? WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newRole);
+            pstmt.setInt(2, userId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("User " + userId + " role updated to " + newRole);
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error updating user role: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static boolean deletePlanAndRelatedData(int planId) {
+        String deleteDocumentsSql = "DELETE FROM documents WHERE plan_id = ?";
+        String deleteBillingSql = "DELETE FROM billing WHERE plan_id = ?";
+        String deleteLogsSql = "DELETE FROM logs WHERE plan_id = ?";
+        String deletePlanSql = "DELETE FROM plans WHERE id = ?";
+
+        try (Connection conn = connect();
+             PreparedStatement pstmtDocs = conn.prepareStatement(deleteDocumentsSql);
+             PreparedStatement pstmtBilling = conn.prepareStatement(deleteBillingSql);
+             PreparedStatement pstmtLogs = conn.prepareStatement(deleteLogsSql);
+             PreparedStatement pstmtPlan = conn.prepareStatement(deletePlanSql)) {
+
+            conn.setAutoCommit(false); // Start transaction
+
+            pstmtDocs.setInt(1, planId);
+            pstmtDocs.executeUpdate();
+
+            pstmtBilling.setInt(1, planId);
+            pstmtBilling.executeUpdate();
+
+            pstmtLogs.setInt(1, planId);
+            pstmtLogs.executeUpdate();
+
+            pstmtPlan.setInt(1, planId);
+            int rowsAffected = pstmtPlan.executeUpdate();
+
+            conn.commit(); // Commit transaction
+            if (rowsAffected > 0) {
+                System.out.println("Plan " + planId + " and all related data deleted successfully.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error deleting plan and related data: " + e.getMessage());
+            try (Connection conn = connect()) {
+                if (conn != null) conn.rollback(); // Rollback on error
+            } catch (SQLException ex) {
+                System.err.println("Rollback error: " + ex.getMessage());
+            }
+        }
+        return false;
     }
 }

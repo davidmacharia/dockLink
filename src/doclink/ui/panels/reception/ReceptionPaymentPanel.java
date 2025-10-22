@@ -237,13 +237,25 @@ public class ReceptionPaymentPanel extends JPanel implements Dashboard.Refreshab
             return;
         }
 
-        Database.updateBillingPayment(billing.getId(), receiptNo);
-        Database.updatePlanStatus(selectedPlanForPayment.getId(), "Payment Received", "Payment received with receipt: " + receiptNo);
-        Database.addLog(new Log(selectedPlanForPayment.getId(), currentUser.getRole(), "Planning", "Payment Received", "Receipt No: " + receiptNo));
+        // Attempt to update billing payment and check for success/failure
+        boolean success = Database.updateBillingPayment(billing.getId(), receiptNo);
 
-        JOptionPane.showMessageDialog(this, "Payment recorded and plan forwarded to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
-        clearPaymentDetails();
-        refreshData();
+        if (success) {
+            Database.updatePlanStatus(selectedPlanForPayment.getId(), "Payment Received", "Payment received with receipt: " + receiptNo);
+            Database.addLog(new Log(selectedPlanForPayment.getId(), currentUser.getRole(), "Planning", "Payment Received", "Receipt No: " + receiptNo));
+
+            // Add the receipt as a document
+            String receiptDocName = "Payment Receipt";
+            String receiptFilePath = "Receipt No: " + receiptNo; // Store receipt number as path for display
+            Document receiptDocument = new Document(selectedPlanForPayment.getId(), receiptDocName, receiptFilePath, "Generated");
+            Database.addDocument(receiptDocument);
+
+            JOptionPane.showMessageDialog(this, "Payment recorded and plan forwarded to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+            clearPaymentDetails();
+            refreshData();
+        } else {
+            JOptionPane.showMessageDialog(this, "Error: The receipt number '" + receiptNo + "' is already taken or another database error occurred. Please use a unique receipt number.", "Payment Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void clearPaymentDetails() {

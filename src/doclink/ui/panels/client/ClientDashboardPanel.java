@@ -26,7 +26,8 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
 
     // Plan details panel components
     private JLabel planIdLabel, applicantNameLabel, plotNoLabel, statusLabel;
-    private JTextArea resubmitRemarksArea; // New text area for resubmission remarks
+    private JTextArea planRemarksArea; // Existing remarks from the plan (read-only)
+    private JTextArea resubmitRemarksArea; // New text area for client's resubmission remarks
     private JButton viewDocumentsButton, resubmitButton; // New resubmit button
 
     private Plan selectedPlan;
@@ -109,7 +110,20 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
         statusLabel = new JLabel("N/A");
         panel.add(statusLabel, gbc);
 
-        // Remarks for resubmission
+        // Existing Plan Remarks (read-only)
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("Plan Remarks:"), gbc);
+        gbc.gridy++;
+        planRemarksArea = new JTextArea(3, 20);
+        planRemarksArea.setEditable(false); // Make it read-only
+        planRemarksArea.setLineWrap(true);
+        planRemarksArea.setWrapStyleWord(true);
+        JScrollPane scrollPanePlanRemarks = new JScrollPane(planRemarksArea);
+        panel.add(scrollPanePlanRemarks, gbc);
+
+        // Remarks for resubmission (editable by client)
         gbc.gridx = 0;
         gbc.gridy++;
         gbc.gridwidth = 2;
@@ -118,8 +132,8 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
         resubmitRemarksArea = new JTextArea(3, 20);
         resubmitRemarksArea.setLineWrap(true);
         resubmitRemarksArea.setWrapStyleWord(true);
-        JScrollPane scrollPaneRemarks = new JScrollPane(resubmitRemarksArea);
-        panel.add(scrollPaneRemarks, gbc);
+        JScrollPane scrollPaneResubmitRemarks = new JScrollPane(resubmitRemarksArea);
+        panel.add(scrollPaneResubmitRemarks, gbc);
 
         // Resubmit Button
         gbc.gridx = 0;
@@ -180,20 +194,16 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
                 applicantNameLabel.setText(selectedPlan.getApplicantName());
                 plotNoLabel.setText(selectedPlan.getPlotNo());
                 statusLabel.setText(selectedPlan.getStatus());
-                resubmitRemarksArea.setText(""); // Clear remarks for new action
+                planRemarksArea.setText(selectedPlan.getRemarks() != null ? selectedPlan.getRemarks() : "No remarks."); // Display existing remarks
+                resubmitRemarksArea.setText(""); // Clear resubmission remarks for new selection
                 viewDocumentsButton.setEnabled(true); // Enable view documents if a plan is selected
 
-                // Enable resubmit button for rejected/deferred statuses
+                // Enable resubmit button ONLY for "Client Notified (Awaiting Resubmission)" status
                 String currentStatus = selectedPlan.getStatus();
-                boolean canResubmit = currentStatus.equals("Rejected") ||
-                                      currentStatus.equals("Deferred") ||
-                                      currentStatus.equals("Rejected (to Planning)") ||
-                                      currentStatus.equals("Deferred (to Planning)") ||
-                                      currentStatus.equals("Rejected by Structural (to Planning)") ||
-                                      currentStatus.equals("Deferred by Structural (Awaiting Clarification)") ||
-                                      currentStatus.equals("Rejected (to Reception for Client)") ||
-                                      currentStatus.equals("Client Notified (Awaiting Resubmission)");
+                boolean canResubmit = currentStatus.equals("Client Notified (Awaiting Resubmission)");
+                
                 resubmitButton.setEnabled(canResubmit);
+                resubmitRemarksArea.setEditable(canResubmit); // Make resubmission remarks editable only if resubmittable
             }
         }
     }
@@ -205,17 +215,11 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
         }
 
         String currentStatus = selectedPlan.getStatus();
-        boolean canResubmit = currentStatus.equals("Rejected") ||
-                              currentStatus.equals("Deferred") ||
-                              currentStatus.equals("Rejected (to Planning)") ||
-                              currentStatus.equals("Deferred (to Planning)") ||
-                              currentStatus.equals("Rejected by Structural (to Planning)") ||
-                              currentStatus.equals("Deferred by Structural (Awaiting Clarification)") ||
-                              currentStatus.equals("Rejected (to Reception for Client)") ||
-                              currentStatus.equals("Client Notified (Awaiting Resubmission)");
+        // Strictly allow resubmission only for "Client Notified (Awaiting Resubmission)"
+        boolean canResubmit = currentStatus.equals("Client Notified (Awaiting Resubmission)");
 
         if (!canResubmit) {
-            JOptionPane.showMessageDialog(this, "This plan cannot be resubmitted from its current status: " + currentStatus, "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "This plan cannot be resubmitted from its current status. Only plans marked 'Client Notified (Awaiting Resubmission)' can be resubmitted.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -224,11 +228,12 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
             return;
         }
 
-        String remarks = resubmitRemarksArea.getText().trim();
-        String newRemarks = "Client resubmitted plan. Original remarks: " + (selectedPlan.getRemarks() != null ? selectedPlan.getRemarks() : "N/A") + ". Client's resubmission remarks: " + (remarks.isEmpty() ? "No additional remarks." : remarks);
+        String clientResubmitRemarks = resubmitRemarksArea.getText().trim();
+        String previousRemarks = selectedPlan.getRemarks() != null ? selectedPlan.getRemarks() : "No previous remarks.";
+        String newRemarks = "Client resubmitted plan. Previous status remarks: [" + previousRemarks + "]. Client's resubmission remarks: " + (clientResubmitRemarks.isEmpty() ? "No additional remarks." : clientResubmitRemarks);
 
         Database.updatePlanStatus(selectedPlan.getId(), "Under Review (Planning)", newRemarks);
-        Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Plan Resubmitted by Client", remarks));
+        Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Plan Resubmitted by Client", clientResubmitRemarks));
 
         JOptionPane.showMessageDialog(this, "Plan resubmitted successfully and sent to Planning for review.", "Resubmission Success", JOptionPane.INFORMATION_MESSAGE);
         clearDetails();
@@ -270,9 +275,11 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
         applicantNameLabel.setText("N/A");
         plotNoLabel.setText("N/A");
         statusLabel.setText("N/A");
+        planRemarksArea.setText("");
         resubmitRemarksArea.setText("");
         viewDocumentsButton.setEnabled(false);
         resubmitButton.setEnabled(false);
+        resubmitRemarksArea.setEditable(false);
     }
 
     @Override

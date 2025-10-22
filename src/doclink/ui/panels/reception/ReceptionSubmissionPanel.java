@@ -59,63 +59,74 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
         gbc.gridwidth = 2;
         panel.add(title, gbc);
 
-        // Applicant Details
-        gbc.gridy++;
-        gbc.gridwidth = 1;
+        // Applicant Details - Arranged side-by-side
+        gbc.gridwidth = 1; // Reset gridwidth for side-by-side
+        int row = 1;
+
+        gbc.gridx = 0;
+        gbc.gridy = row;
         panel.add(new JLabel("Applicant Name:"), gbc);
         gbc.gridx = 1;
         applicantNameField = new JTextField(25);
         panel.add(applicantNameField, gbc);
 
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         panel.add(new JLabel("Contact:"), gbc);
         gbc.gridx = 1;
         contactField = new JTextField(25);
         panel.add(contactField, gbc);
 
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         panel.add(new JLabel("Plot No:"), gbc);
         gbc.gridx = 1;
         plotNoField = new JTextField(25);
         panel.add(plotNoField, gbc);
 
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         panel.add(new JLabel("Location:"), gbc);
         gbc.gridx = 1;
         locationField = new JTextField(25);
         panel.add(locationField, gbc);
 
         // Document Checklist
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
-        gbc.gridwidth = 2;
+        gbc.gridy = row;
+        gbc.gridwidth = 2; // Span two columns for the title
         JLabel docTitle = new JLabel("Document Checklist:");
         docTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
         docTitle.setBorder(BorderFactory.createEmptyBorder(10, 0, 5, 0));
         panel.add(docTitle, gbc);
 
-        gbc.gridy++;
+        row++;
+        gbc.gridy = row;
+        JPanel checklistPanel = new JPanel(new GridLayout(0, 2, 10, 5)); // 2 columns, horizontal and vertical gap
+        checklistPanel.setOpaque(false); // Inherit background
         sitePlanCb = new JCheckBox("Site Plan");
-        panel.add(sitePlanCb, gbc);
-        gbc.gridy++;
         titleDeedCb = new JCheckBox("Title Deed");
-        panel.add(titleDeedCb, gbc);
-        gbc.gridy++;
         drawingsCb = new JCheckBox("Architectural Drawings");
-        panel.add(drawingsCb, gbc);
-        gbc.gridy++;
         otherDocsCb = new JCheckBox("Other Supporting Documents");
-        panel.add(otherDocsCb, gbc);
+        
+        checklistPanel.add(sitePlanCb);
+        checklistPanel.add(titleDeedCb);
+        checklistPanel.add(drawingsCb);
+        checklistPanel.add(otherDocsCb);
+        panel.add(checklistPanel, gbc); // Add the checklist panel
 
         // Remarks
+        row++;
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy = row;
         gbc.gridwidth = 2;
         panel.add(new JLabel("Remarks:"), gbc);
-        gbc.gridy++;
+        row++;
+        gbc.gridy = row;
         remarksArea = new JTextArea(5, 25);
         remarksArea.setLineWrap(true);
         remarksArea.setWrapStyleWord(true);
@@ -123,7 +134,8 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
         panel.add(scrollPane, gbc);
 
         // Submit Button
-        gbc.gridy++;
+        row++;
+        gbc.gridy = row;
         submitPlanButton = new JButton("Submit Plan");
         submitPlanButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
         submitPlanButton.setBackground(new Color(0, 123, 255));
