@@ -11,8 +11,8 @@ import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
 
 import javax.swing.*;
-import javax.swing.event.ListSelectionEvent; // Added import
-import javax.swing.event.ListSelectionListener; // Added import
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.List;
@@ -217,7 +217,8 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
     private void loadSelectedPlanDetails() {
         int selectedRow = tablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
-            int planId = (int) tablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            // Corrected: Get the actual plan ID from the hidden column (index 1)
+            int planId = (int) tablePanel.getPlansTable().getValueAt(selectedRow, 1);
             selectedPlan = Database.getPlanById(planId);
 
             if (selectedPlan != null) {
@@ -231,26 +232,30 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
                 // Enable/disable buttons based on status
                 boolean isUnderReviewPlanning = selectedPlan.getStatus().equals("Under Review (Planning)");
                 boolean isAwaitingPayment = selectedPlan.getStatus().equals("Awaiting Payment");
-                boolean isPaymentReceived = selectedPlan.getStatus().equals("Payment Received");
+                boolean isPaymentReceived = selectedPlan.getStatus().equals("PaymentReceived"); // This status is set after reception processes payment
                 boolean isRejectedByDirector = selectedPlan.getStatus().equals("Rejected (to Planning)");
                 boolean isDeferredByDirector = selectedPlan.getStatus().equals("Deferred (to Planning)");
                 boolean isRejectedByCommittee = selectedPlan.getStatus().equals("Rejected"); // From Committee
                 boolean isDeferredByCommittee = selectedPlan.getStatus().equals("Deferred"); // From Committee
                 boolean isRejectedByStructural = selectedPlan.getStatus().equals("Rejected by Structural (to Planning)");
                 boolean hasReferenceNo = selectedPlan.getReferenceNo() != null && !selectedPlan.getReferenceNo().isEmpty();
-
+                
+                // Determine if the plan has already been billed or payment confirmed
+                boolean hasPaymentConfirmedRemark = selectedPlan.getRemarks() != null && selectedPlan.getRemarks().contains("Payment received with receipt:");
+                boolean hasBeenBilled = isAwaitingPayment || isPaymentReceived || (isUnderReviewPlanning && hasPaymentConfirmedRemark);
 
                 // Assign Ref No button enabled for 'Under Review (Planning)' or 'Payment Received' or returned plans
                 assignRefNoButton.setEnabled(isUnderReviewPlanning || isPaymentReceived || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural);
                 
-                // Send Billing button enabled for 'Under Review (Planning)' or returned plans, but not if already awaiting payment
-                sendBillingButton.setEnabled((isUnderReviewPlanning || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural) && !isAwaitingPayment);
+                // Send Billing button enabled for 'Under Review (Planning)' or returned plans, but not if already billed
+                sendBillingButton.setEnabled((isUnderReviewPlanning || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural) && !hasBeenBilled);
                 
                 // Forward to Committee button enabled if payment is received, OR if under planning review AND has a reference number, OR if it's a returned plan for re-evaluation
                 forwardToCommitteeButton.setEnabled(isPaymentReceived || (isUnderReviewPlanning && hasReferenceNo) || isRejectedByDirector || isDeferredByDirector || isRejectedByCommittee || isDeferredByCommittee || isRejectedByStructural);
                 
                 // Forward Rejected to Reception button enabled if rejected by Director, Committee, Structural, OR if currently under Planning review
-                forwardRejectedToReceptionButton.setEnabled(isRejectedByDirector || isRejectedByCommittee || isRejectedByStructural || isUnderReviewPlanning);
+                // AND NOT if it's already billed
+                forwardRejectedToReceptionButton.setEnabled((isRejectedByDirector || isRejectedByCommittee || isRejectedByStructural || isUnderReviewPlanning) && !hasBeenBilled);
                 viewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
 
 
@@ -306,8 +311,19 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
             JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        boolean isUnderReviewPlanning = selectedPlan.getStatus().equals("Under Review (Planning)");
+        boolean isAwaitingPayment = selectedPlan.getStatus().equals("Awaiting Payment");
+        boolean isPaymentReceived = selectedPlan.getStatus().equals("Payment Received");
+        boolean hasPaymentConfirmedRemark = selectedPlan.getRemarks() != null && selectedPlan.getRemarks().contains("Payment received with receipt:");
+
+        if (isAwaitingPayment || isPaymentReceived || (isUnderReviewPlanning && hasPaymentConfirmedRemark)) {
+            JOptionPane.showMessageDialog(this, "This plan has already been billed or payment has been confirmed. Cannot send billing again.", "Action Not Allowed", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         // Allow sending billing for 'Under Review (Planning)' or returned plans
-        if (!selectedPlan.getStatus().equals("Under Review (Planning)") &&
+        if (!isUnderReviewPlanning &&
             !selectedPlan.getStatus().equals("Rejected (to Planning)") && !selectedPlan.getStatus().equals("Deferred (to Planning)") &&
             !selectedPlan.getStatus().equals("Rejected") && !selectedPlan.getStatus().equals("Deferred") &&
             !selectedPlan.getStatus().equals("Rejected by Structural (to Planning)")) {
@@ -326,7 +342,6 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
 
         Billing existingBilling = Database.getBillingByPlanId(selectedPlan.getId());
         if (existingBilling != null) {
-            // If billing already exists, update it or confirm re-billing
             int confirm = JOptionPane.showConfirmDialog(this, "Billing already exists for this plan. Do you want to update the amount and resend?", "Confirm Re-billing", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.NO_OPTION) {
                 return;
@@ -347,7 +362,6 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
         } else {
             Database.addBilling(new Billing(selectedPlan.getId(), amount));
         }
-
 
         Database.updatePlanStatus(selectedPlan.getId(), "Awaiting Payment", "Billing sent to Reception for client notification.");
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Reception", "Sent Billing Details", "Billing amount: " + amount));
@@ -390,6 +404,19 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
             JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+        
+        // Check if the plan has already been billed
+        boolean isUnderReviewPlanning = selectedPlan.getStatus().equals("Under Review (Planning)");
+        boolean isAwaitingPayment = selectedPlan.getStatus().equals("Awaiting Payment");
+        boolean isPaymentReceived = selectedPlan.getStatus().equals("Payment Received");
+        boolean hasPaymentConfirmedRemark = selectedPlan.getRemarks() != null && selectedPlan.getRemarks().contains("Payment received with receipt:");
+        boolean hasBeenBilled = isAwaitingPayment || isPaymentReceived || (isUnderReviewPlanning && hasPaymentConfirmedRemark);
+
+        if (hasBeenBilled) {
+            JOptionPane.showMessageDialog(this, "This plan has already been billed. It cannot be forwarded to Reception as rejected.", "Action Not Allowed", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         // Only allow forwarding if the plan is in a rejected state from Director, Committee, or Structural, OR if currently under Planning review
         if (!selectedPlan.getStatus().equals("Rejected (to Planning)") &&
             !selectedPlan.getStatus().equals("Rejected") &&
@@ -453,37 +480,44 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
 
     @Override
     public void refreshData() {
-        // Update cards
-        int pendingPlanning = Database.getPlansByStatus("Under Review (Planning)").size();
+        // Define statuses relevant for Planning Department's immediate action
+        List<String> planningActionableStatuses = List.of(
+            "Under Review (Planning)",
+            "Awaiting Payment",
+            "Payment Received",
+            "Rejected (to Planning)",
+            "Deferred (to Planning)",
+            "Rejected", // From Committee
+            "Deferred", // From Committee
+            "Rejected by Structural (to Planning)"
+        );
+
+        // Filter all plans to get only those relevant to Planning's immediate actions
+        List<Plan> allPlans = Database.getAllPlans();
+        List<Plan> plansForPlanningAction = allPlans.stream()
+                                                .filter(p -> planningActionableStatuses.contains(p.getStatus()))
+                                                .collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
+
+        // Update cards based on these actionable statuses
+        int newPlansForReview = Database.getPlansByStatus("Under Review (Planning)").size();
         int awaitingPayment = Database.getPlansByStatus("Awaiting Payment").size();
-        int paymentReceived = Database.getPlansByStatus("Payment Received").size(); // Plans returned from Reception after payment
-        int returnedFromDirectorOrCommitteeOrStructural = Database.getPlansByStatus("Rejected (to Planning)").size() +
-                                             Database.getPlansByStatus("Deferred (to Planning)").size() +
-                                             Database.getPlansByStatus("Rejected").size() + // From Committee
-                                             Database.getPlansByStatus("Deferred").size() + // From Committee
-                                             Database.getPlansByStatus("Rejected by Structural (to Planning)").size();
+        
+        // Count plans returned from other departments
+        int returnedPlans = Database.getPlansByStatus("Rejected (to Planning)").size() +
+                            Database.getPlansByStatus("Deferred (to Planning)").size() +
+                            Database.getPlansByStatus("Rejected").size() + // From Committee
+                            Database.getPlansByStatus("Deferred").size() + // From Committee
+                            Database.getPlansByStatus("Rejected by Structural (to Planning)").size();
 
-
-        cardsPanel.updateCard(0, "New Plans for Review", pendingPlanning, new Color(255, 193, 7)); // Yellow
+        cardsPanel.updateCard(0, "New Plans for Review", newPlansForReview, new Color(255, 193, 7)); // Yellow
         cardsPanel.updateCard(1, "Awaiting Payment", awaitingPayment, new Color(255, 165, 0)); // Orange
-        cardsPanel.updateCard(2, "Payment Received / Returned", paymentReceived + returnedFromDirectorOrCommitteeOrStructural, new Color(40, 167, 69)); // Green
+        cardsPanel.updateCard(2, "Returned Plans", returnedPlans, new Color(220, 53, 69)); // Red
 
-        // Update table with plans relevant to Planning (Under Review, Awaiting Payment, Payment Received, Rejected/Deferred)
-        List<Plan> planningPlans = new ArrayList<>();
-        planningPlans.addAll(Database.getPlansByStatus("Under Review (Planning)"));
-        planningPlans.addAll(Database.getPlansByStatus("Awaiting Payment"));
-        planningPlans.addAll(Database.getPlansByStatus("Payment Received"));
-        planningPlans.addAll(Database.getPlansByStatus("Rejected (to Planning)"));
-        planningPlans.addAll(Database.getPlansByStatus("Deferred (to Planning)"));
-        planningPlans.addAll(Database.getPlansByStatus("Rejected")); // From Committee
-        planningPlans.addAll(Database.getPlansByStatus("Deferred")); // From Committee
-        planningPlans.addAll(Database.getPlansByStatus("Rejected by Structural (to Planning)"));
-        // Removed: planningPlans.addAll(Database.getPlansByStatus("Client Notified (Awaiting Resubmission)")); // Plans resubmitted by client come back to planning
-
-        tablePanel.updateTable(planningPlans);
+        // Update table with only plans requiring Planning's action
+        tablePanel.updateTable(plansForPlanningAction);
 
         // Clear details if no plan is selected or if selected plan is no longer relevant
-        if (selectedPlan != null && !planningPlans.stream().anyMatch(p -> p.getId() == selectedPlan.getId())) {
+        if (selectedPlan != null && !plansForPlanningAction.stream().anyMatch(p -> p.getId() == selectedPlan.getId())) {
             clearDetails();
         } else if (selectedPlan != null) {
             // Re-load details for the currently selected plan to reflect any status changes

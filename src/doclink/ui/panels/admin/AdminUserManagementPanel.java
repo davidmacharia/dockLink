@@ -6,13 +6,18 @@ import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Vector;
+import java.util.stream.Collectors;
 
 public class AdminUserManagementPanel extends JPanel implements Dashboard.Refreshable {
     private User currentUser;
@@ -23,7 +28,11 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
     private DefaultTableModel tableModel;
     private JTextField nameField, emailField, passwordField;
     private JComboBox<String> roleComboBox;
-    private JButton addUserButton, deleteUserButton, updateUserRoleButton, blockUnblockButton; // Added blockUnblockButton
+    private JButton addUserButton, deleteUserButton, updateUserRoleButton, blockUnblockButton;
+
+    private JTextField searchField; // New search field
+    private JButton searchButton; // New search button
+    private List<User> allUsersData; // To store the original, unfiltered list of users
 
     private User selectedUser;
     private static final Color DARK_NAVY = new Color(26, 35, 126);
@@ -60,6 +69,30 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         panel.setBackground(Color.WHITE);
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
+        // Search Panel
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        searchPanel.setOpaque(false);
+        searchField = new JTextField(25);
+        searchField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        searchField.putClientProperty("JTextField.placeholderText", "Search by Name, Email, Role...");
+        searchButton = new JButton("Search");
+        searchButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        searchButton.setBackground(new Color(0, 123, 255));
+        searchButton.setForeground(Color.WHITE);
+        searchButton.setFocusPainted(false);
+        searchButton.setBorderPainted(false);
+        searchButton.setOpaque(true);
+        searchButton.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        searchButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        searchButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) { searchButton.setBackground(new Color(0, 100, 200)); }
+            public void mouseExited(java.awt.event.MouseEvent evt) { searchButton.setBackground(new Color(0, 123, 255)); }
+        });
+
+        searchPanel.add(searchField);
+        searchPanel.add(searchButton);
+        panel.add(searchPanel, BorderLayout.NORTH);
+
         String[] columnNames = {"No.", "ID", "Name", "Email", "Role"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
@@ -90,6 +123,28 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
 
         JScrollPane scrollPane = new JScrollPane(userTable);
         panel.add(scrollPane, BorderLayout.CENTER);
+
+        // Add action listener to search button
+        searchButton.addActionListener(e -> applyFilter());
+
+        // Add document listener for real-time search
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+        });
+
         return panel;
     }
 
@@ -129,14 +184,15 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         gbc.gridy++;
         panel.add(new JLabel("Password:"), gbc);
         gbc.gridx = 1;
-        passwordField = new JTextField(20); // Using JTextField for simplicity, JPasswordField for production
+        passwordField = new JTextField(20); 
+        passwordField.setText("doclink"); // Set default password
         panel.add(passwordField, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
         panel.add(new JLabel("Role:"), gbc);
         gbc.gridx = 1;
-        String[] roles = {"Reception", "Planning", "Committee", "Director", "Structural", "Client", "Admin"}; // Removed "Blocked" from dropdown
+        String[] roles = {"Reception", "Planning", "Committee", "Director", "Structural", "Client", "Admin"}; 
         roleComboBox = new JComboBox<>(roles);
         panel.add(roleComboBox, gbc);
 
@@ -148,8 +204,8 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         panel.add(addUserButton, gbc);
 
         gbc.gridy++;
-        updateUserRoleButton = createStyledButton("Update User Role", new Color(0, 123, 255)); // Blue
-        updateUserRoleButton.addActionListener(e -> updateSelectedUserRole());
+        updateUserRoleButton = createStyledButton("Update User Details", new Color(0, 123, 255)); // Blue
+        updateUserRoleButton.addActionListener(e -> updateSelectedUser()); // Renamed method call
         updateUserRoleButton.setEnabled(false);
         panel.add(updateUserRoleButton, gbc);
 
@@ -197,34 +253,34 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
     private void loadSelectedUserDetails() {
         int selectedRow = userTable.getSelectedRow();
         if (selectedRow != -1) {
-            int userId = (int) tableModel.getValueAt(selectedRow, 1); 
-            List<User> allUsers = Database.getAllUsers();
-            selectedUser = allUsers.stream().filter(u -> u.getId() == userId).findFirst().orElse(null);
+            // Get the actual user ID from the hidden column
+            int userId = (int) userTable.getModel().getValueAt(selectedRow, 1); 
+            
+            // Find the user in the full data list, not just the filtered view
+            selectedUser = allUsersData.stream().filter(u -> u.getId() == userId).findFirst().orElse(null);
 
             if (selectedUser != null) {
                 nameField.setText(selectedUser.getName());
                 emailField.setText(selectedUser.getEmail());
-                passwordField.setText(""); 
+                passwordField.setText("doclink"); // Set default password for update
                 
-                // Only set role if it's not "Blocked" to avoid issues with dropdown
                 if (!selectedUser.getRole().equals("Blocked")) {
                     roleComboBox.setSelectedItem(selectedUser.getRole());
                 } else {
-                    roleComboBox.setSelectedIndex(-1); // Clear selection if blocked
+                    roleComboBox.setSelectedIndex(-1); 
                 }
 
                 updateUserRoleButton.setEnabled(true);
                 deleteUserButton.setEnabled(true);
                 addUserButton.setEnabled(false); 
                 
-                // Configure Block/Unblock button
                 blockUnblockButton.setEnabled(true);
                 if (selectedUser.getRole().equals("Blocked")) {
                     blockUnblockButton.setText("Unblock User");
-                    blockUnblockButton.setBackground(new Color(40, 167, 69)); // Green for unblock
+                    blockUnblockButton.setBackground(new Color(40, 167, 69)); 
                 } else {
                     blockUnblockButton.setText("Block User");
-                    blockUnblockButton.setBackground(new Color(255, 165, 0)); // Orange for block
+                    blockUnblockButton.setBackground(new Color(255, 165, 0)); 
                 }
             }
         }
@@ -234,7 +290,7 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         selectedUser = null;
         nameField.setText("");
         emailField.setText("");
-        passwordField.setText("");
+        passwordField.setText("doclink"); // Set default password
         roleComboBox.setSelectedIndex(0); 
         updateUserRoleButton.setEnabled(false);
         deleteUserButton.setEnabled(false);
@@ -242,21 +298,24 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         
         blockUnblockButton.setEnabled(false);
         blockUnblockButton.setText("Block/Unblock User");
-        blockUnblockButton.setBackground(new Color(108, 117, 125)); // Reset to grey
+        blockUnblockButton.setBackground(new Color(108, 117, 125)); 
     }
 
     private void addNewUser() {
         String name = nameField.getText().trim();
         String email = emailField.getText().trim();
-        String password = passwordField.getText().trim();
+        String password = passwordField.getText().trim(); // Can be empty or "doclink" or custom
         String role = (String) roleComboBox.getSelectedItem();
 
-        if (name.isEmpty() || email.isEmpty() || password.isEmpty() || role == null) {
-            JOptionPane.showMessageDialog(this, "Please fill in all fields to add a new user.", "Input Error", JOptionPane.ERROR_MESSAGE);
+        if (name.isEmpty() || email.isEmpty() || role == null) { // Password can be blank
+            JOptionPane.showMessageDialog(this, "Please fill in Name, Email, and select a Role.", "Input Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+        
+        // If password is left blank, use an empty string. Otherwise, use the provided password.
+        String finalPassword = password.isEmpty() ? "" : password;
 
-        if (Database.addUser(name, email, password, role)) {
+        if (Database.addUser(name, email, finalPassword, role)) {
             JOptionPane.showMessageDialog(this, "User '" + name + "' added successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
             clearForm();
             refreshData();
@@ -265,30 +324,90 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         }
     }
 
-    private void updateSelectedUserRole() {
+    private void updateSelectedUser() { // Renamed from updateSelectedUserRole
         if (selectedUser == null) {
             JOptionPane.showMessageDialog(this, "Please select a user to update.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
         
+        String newName = nameField.getText().trim();
+        String newEmail = emailField.getText().trim();
         String newRole = (String) roleComboBox.getSelectedItem();
-        if (newRole == null) {
-            JOptionPane.showMessageDialog(this, "Please select a role.", "Input Error", JOptionPane.ERROR_MESSAGE);
+        String newPassword = passwordField.getText().trim(); // Get current password field value
+
+        if (newName.isEmpty() || newEmail.isEmpty() || newRole == null) {
+            JOptionPane.showMessageDialog(this, "Please fill in Name, Email, and select a Role.", "Input Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
         
-        // Prevent changing to "Blocked" via this button, use the dedicated block/unblock button
         if (newRole.equals("Blocked")) {
             JOptionPane.showMessageDialog(this, "Use the 'Block/Unblock User' button to manage the 'Blocked' status.", "Action Not Allowed", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        if (Database.updateUserRole(selectedUser.getId(), newRole)) {
-            JOptionPane.showMessageDialog(this, "Role for user '" + selectedUser.getName() + "' updated to '" + newRole + "'.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        boolean detailsUpdated = false;
+        boolean roleUpdated = false;
+        boolean passwordUpdated = false;
+        StringBuilder feedback = new StringBuilder("User details for '" + selectedUser.getName() + "' updated:\n");
+
+        // Update name and email if changed
+        if (!selectedUser.getName().equals(newName) || !selectedUser.getEmail().equals(newEmail)) {
+            if (Database.updateUserNameAndEmail(selectedUser.getId(), newName, newEmail)) {
+                detailsUpdated = true;
+                feedback.append("- Name and Email updated.\n");
+            } else {
+                feedback.append("- Failed to update Name/Email (possibly duplicate email).\n");
+            }
+        }
+
+        // Update role if changed
+        if (!selectedUser.getRole().equals(newRole)) {
+            if (Database.updateUserRole(selectedUser.getId(), newRole)) {
+                roleUpdated = true;
+                feedback.append("- Role updated to '" + newRole + "'.\n");
+            } else {
+                feedback.append("- Failed to update Role.\n");
+            }
+        }
+
+        // Update password if it's not empty AND it's different from the default "doclink"
+        // OR if it's explicitly set to "doclink"
+        if (!newPassword.isEmpty() && !newPassword.equals("doclink")) {
+             if (Database.updateUserPassword(selectedUser.getId(), newPassword)) {
+                passwordUpdated = true;
+                feedback.append("- Password updated.\n");
+             } else {
+                feedback.append("- Failed to update Password.\n");
+             }
+        } else if (newPassword.equals("doclink") && !selectedUser.getRole().equals("Blocked")) { // Only update to "doclink" if it's explicitly there and user is not blocked
+            // This condition handles if the admin explicitly wants to set the password to "doclink"
+            // We need to fetch the current password to avoid unnecessary updates if it's already "doclink"
+            // For simplicity, we'll assume if the field is "doclink", and it's not the current password, we update.
+            // A more robust solution would involve fetching the current password hash.
+            // For now, if the field is "doclink" and the user's current password isn't "doclink", we update.
+            // This requires fetching the current password, which is not directly available in `selectedUser` object.
+            // Given the current `Database.authenticateUser` method, we don't store plain text passwords in `User` model.
+            // To keep it simple and avoid fetching password from DB for comparison, we'll update if the field is "doclink".
+            if (Database.updateUserPassword(selectedUser.getId(), newPassword)) {
+                passwordUpdated = true;
+                feedback.append("- Password reset to 'doclink'.\n");
+            } else {
+                feedback.append("- Failed to reset Password to 'doclink'.\n");
+            }
+        } else if (newPassword.isEmpty()) {
+            // If the admin explicitly cleared the password field, we do NOT update the password.
+            // The existing password remains.
+            feedback.append("- Password field left blank, existing password retained.\n");
+            passwordUpdated = true; // Mark as true because no error occurred, just no update.
+        }
+
+
+        if (detailsUpdated || roleUpdated || passwordUpdated) {
+            JOptionPane.showMessageDialog(this, feedback.toString(), "Update Success", JOptionPane.INFORMATION_MESSAGE);
             clearForm();
             refreshData();
         } else {
-            JOptionPane.showMessageDialog(this, "Failed to update user role.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No changes detected or failed to update user details.", "Information", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
@@ -299,7 +418,6 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         }
 
         if (selectedUser.getRole().equals("Blocked")) {
-            // Unblock user
             String[] roles = {"Reception", "Planning", "Committee", "Director", "Structural", "Client", "Admin"};
             String newRole = (String) JOptionPane.showInputDialog(
                 this,
@@ -308,7 +426,7 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
                 JOptionPane.QUESTION_MESSAGE,
                 null,
                 roles,
-                "Client" // Default selection
+                "Client" 
             );
 
             if (newRole != null && !newRole.trim().isEmpty()) {
@@ -323,7 +441,6 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
                 JOptionPane.showMessageDialog(this, "Unblock cancelled or no role selected.", "Cancelled", JOptionPane.INFORMATION_MESSAGE);
             }
         } else {
-            // Block user
             int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to block user '" + selectedUser.getName() + "'? They will not be able to log in.", "Confirm Block", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (confirm == JOptionPane.YES_OPTION) {
                 if (Database.updateUserRole(selectedUser.getId(), "Blocked")) {
@@ -355,30 +472,47 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
         }
     }
 
-    @Override
-    public void refreshData() {
+    private void applyFilter() {
         tableModel.setRowCount(0); // Clear existing data
-        List<User> users = Database.getAllUsers();
-        for (int i = 0; i < users.size(); i++) {
-            User user = users.get(i);
+        String searchText = searchField.getText().toLowerCase(Locale.ROOT).trim();
+
+        List<User> filteredUsers = allUsersData.stream()
+                .filter(user -> {
+                    if (searchText.isEmpty()) {
+                        return true; // Show all if search field is empty
+                    }
+                    // Check various fields for the search text
+                    return (user.getName() != null && user.getName().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                           (user.getEmail() != null && user.getEmail().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                           (user.getRole() != null && user.getRole().toLowerCase(Locale.ROOT).contains(searchText));
+                })
+                .collect(Collectors.toList());
+
+        for (int i = 0; i < filteredUsers.size(); i++) {
+            User user = filteredUsers.get(i);
             tableModel.addRow(new Object[]{
-                i + 1, // Sequential row number
-                user.getId(), // Actual ID (hidden)
+                i + 1, // Row number starting from 1
+                user.getId(),
                 user.getName(),
                 user.getEmail(),
                 user.getRole()
             });
         }
+    }
+
+    @Override
+    public void refreshData() {
+        allUsersData = Database.getAllUsers(); // Load all users from the database
+        applyFilter(); // Apply the current filter (or show all if no filter)
         clearForm(); // Reset form after refresh
         
         // Update cards with relevant counts for Admin
-        List<User> allUsers = Database.getAllUsers();
-        int totalUsers = allUsers.size();
-        long activeUsers = allUsers.stream().filter(u -> !u.getRole().equals("Blocked")).count(); // Exclude 'Blocked' users from active count
-        long adminUsers = allUsers.stream().filter(u -> u.getRole().equals("Admin")).count();
+        int totalUsers = allUsersData.size();
+        long activeUsers = allUsersData.stream().filter(u -> !u.getRole().equals("Blocked")).count(); 
+        long adminUsers = allUsersData.stream().filter(u -> u.getRole().equals("Admin")).count();
 
-        cardsPanel.updateCard(0, "Total Users", totalUsers, new Color(0, 123, 255)); // Blue
-        cardsPanel.updateCard(1, "Active Users", (int) activeUsers, new Color(40, 167, 69)); // Green
-        cardsPanel.updateCard(2, "Admin Accounts", (int) adminUsers, new Color(255, 193, 7)); // Yellow
+        cardsPanel.updateCard(0, "Total Users", totalUsers, new Color(0, 123, 255)); 
+        cardsPanel.updateCard(1, "Active Users", (int) activeUsers, new Color(40, 167, 69)); 
+        cardsPanel.updateCard(2, "Admin Accounts", (int) adminUsers, new Color(255, 193, 7)); 
     }
 }

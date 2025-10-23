@@ -9,6 +9,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +21,8 @@ public class DashboardTablePanel extends JPanel {
     private DefaultTableModel tableModel;
     private JTextField searchField;
     private JButton searchButton;
+    private JTextField fromDateField; // New: From Date field
+    private JTextField toDateField;   // New: To Date field
     private List<Plan> allPlansData; // To store the original, unfiltered list of plans
 
     private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
@@ -29,22 +33,47 @@ public class DashboardTablePanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(0, 20, 20, 20)); // Padding
 
         // Header Panel for Title and Search
-        JPanel headerContainerPanel = new JPanel(new BorderLayout());
+        JPanel headerContainerPanel = new JPanel(new GridBagLayout()); // Changed to GridBagLayout
         headerContainerPanel.setOpaque(false);
         headerContainerPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0)); // Padding below search bar
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 0, 5, 0); // Padding between components
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.gridx = 0;
 
         JLabel tableTitle = new JLabel("Recent Plans");
         tableTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
         tableTitle.setForeground(DARK_NAVY); // Changed to DARK_NAVY for contrast
-        tableTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0)); // Padding below title
-        headerContainerPanel.add(tableTitle, BorderLayout.NORTH);
+        gbc.gridy = 0;
+        headerContainerPanel.add(tableTitle, gbc);
 
-        // Search Panel
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        searchPanel.setOpaque(false);
-        searchField = new JTextField(30);
+        // Panel for text search
+        JPanel textSearchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        textSearchPanel.setOpaque(false);
+        searchField = new JTextField(25); // Slightly reduced width
         searchField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         searchField.putClientProperty("JTextField.placeholderText", "Search by Reference No, Applicant, Plot No, Status...");
+        textSearchPanel.add(searchField);
+        gbc.gridy = 1;
+        headerContainerPanel.add(textSearchPanel, gbc); // Add text search panel
+
+        // Panel for date search
+        JPanel dateSearchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        dateSearchPanel.setOpaque(false);
+        dateSearchPanel.add(new JLabel("From Date (YYYY-MM-DD):"));
+        fromDateField = new JTextField(10);
+        fromDateField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        fromDateField.putClientProperty("JTextField.placeholderText", "YYYY-MM-DD");
+        dateSearchPanel.add(fromDateField);
+
+        dateSearchPanel.add(new JLabel("To Date (YYYY-MM-DD):"));
+        toDateField = new JTextField(10);
+        toDateField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        toDateField.putClientProperty("JTextField.placeholderText", "YYYY-MM-DD");
+        dateSearchPanel.add(toDateField);
+
         searchButton = new JButton("Search");
         searchButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
         searchButton.setBackground(new Color(0, 123, 255));
@@ -59,9 +88,9 @@ public class DashboardTablePanel extends JPanel {
             public void mouseExited(java.awt.event.MouseEvent evt) { searchButton.setBackground(new Color(0, 123, 255)); }
         });
 
-        searchPanel.add(searchField);
-        searchPanel.add(searchButton);
-        headerContainerPanel.add(searchPanel, BorderLayout.CENTER);
+        dateSearchPanel.add(searchButton); // Add search button to date search panel
+        gbc.gridy = 2;
+        headerContainerPanel.add(dateSearchPanel, gbc); // Add date search panel
 
         add(headerContainerPanel, BorderLayout.NORTH);
 
@@ -144,7 +173,7 @@ public class DashboardTablePanel extends JPanel {
         searchButton.addActionListener(e -> applyFilter());
 
         // Add document listener for real-time search
-        searchField.getDocument().addDocumentListener(new DocumentListener() {
+        DocumentListener filterDocumentListener = new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
                 applyFilter();
@@ -159,7 +188,10 @@ public class DashboardTablePanel extends JPanel {
             public void changedUpdate(DocumentEvent e) {
                 applyFilter();
             }
-        });
+        };
+        searchField.getDocument().addDocumentListener(filterDocumentListener);
+        fromDateField.getDocument().addDocumentListener(filterDocumentListener); // New: Add listener to date fields
+        toDateField.getDocument().addDocumentListener(filterDocumentListener);   // New: Add listener to date fields
     }
 
     public void updateTable(List<Plan> plans) {
@@ -171,18 +203,52 @@ public class DashboardTablePanel extends JPanel {
         tableModel.setRowCount(0); // Clear existing data
         String searchText = searchField.getText().toLowerCase(Locale.ROOT).trim();
 
+        LocalDate fromDate = null;
+        LocalDate toDate = null;
+
+        try {
+            if (!fromDateField.getText().trim().isEmpty()) {
+                fromDate = LocalDate.parse(fromDateField.getText().trim());
+            }
+        } catch (DateTimeParseException e) {
+            // Optionally show an error, but for now, just ignore invalid date input
+            System.err.println("Invalid 'From Date' format: " + fromDateField.getText());
+        }
+
+        try {
+            if (!toDateField.getText().trim().isEmpty()) {
+                toDate = LocalDate.parse(toDateField.getText().trim());
+            }
+        } catch (DateTimeParseException e) {
+            // Optionally show an error, but for now, just ignore invalid date input
+            System.err.println("Invalid 'To Date' format: " + toDateField.getText());
+        }
+
+        // Create effectively final copies for use in the lambda
+        final LocalDate finalFromDate = fromDate;
+        final LocalDate finalToDate = toDate;
+
         List<Plan> filteredPlans = allPlansData.stream()
                 .filter(plan -> {
-                    if (searchText.isEmpty()) {
-                        return true; // Show all if search field is empty
+                    boolean textMatches = true;
+                    if (!searchText.isEmpty()) {
+                        textMatches = (plan.getReferenceNo() != null && plan.getReferenceNo().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                                      (plan.getApplicantName() != null && plan.getApplicantName().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                                      (plan.getPlotNo() != null && plan.getPlotNo().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                                      (plan.getLocation() != null && plan.getLocation().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                                      (plan.getStatus() != null && plan.getStatus().toLowerCase(Locale.ROOT).contains(searchText)) ||
+                                      (plan.getRemarks() != null && plan.getRemarks().toLowerCase(Locale.ROOT).contains(searchText));
                     }
-                    // Check various fields for the search text
-                    return (plan.getReferenceNo() != null && plan.getReferenceNo().toLowerCase(Locale.ROOT).contains(searchText)) ||
-                           (plan.getApplicantName() != null && plan.getApplicantName().toLowerCase(Locale.ROOT).contains(searchText)) ||
-                           (plan.getPlotNo() != null && plan.getPlotNo().toLowerCase(Locale.ROOT).contains(searchText)) ||
-                           (plan.getLocation() != null && plan.getLocation().toLowerCase(Locale.ROOT).contains(searchText)) ||
-                           (plan.getStatus() != null && plan.getStatus().toLowerCase(Locale.ROOT).contains(searchText)) ||
-                           (plan.getRemarks() != null && plan.getRemarks().toLowerCase(Locale.ROOT).contains(searchText));
+
+                    boolean dateMatches = true;
+                    if (finalFromDate != null && plan.getDateSubmitted().isBefore(finalFromDate)) {
+                        dateMatches = false;
+                    }
+                    if (finalToDate != null && plan.getDateSubmitted().isAfter(finalToDate)) {
+                        dateMatches = false;
+                    }
+
+                    return textMatches && dateMatches;
                 })
                 .collect(Collectors.toList());
 

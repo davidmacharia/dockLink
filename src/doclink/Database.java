@@ -6,9 +6,10 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JOptionPane; // Added import
 
 public class Database {
-    private static final String DB_URL = "jdbc:sqlite:doclink.db";
+    private static final String DB_URL = "jdbc:sqlite:data/doclink.db";
 
     public static Connection connect() {
         Connection conn = null;
@@ -28,7 +29,7 @@ public class Database {
                          "name TEXT NOT NULL," +
                          "email TEXT UNIQUE NOT NULL," +
                          "password TEXT NOT NULL," +
-                         "role TEXT NOT NULL)"); // Reception, Planning, Committee, Director, Structural, Client, Admin
+                         "role TEXT NOT NULL)"); // Reception, Planning, Committee, Director, Structural, Client, Admin, Blocked
 
             // Create plans table
             stmt.execute("CREATE TABLE IF NOT EXISTS plans (" +
@@ -49,7 +50,7 @@ public class Database {
                          "doc_name TEXT NOT NULL," +
                          "file_path TEXT," +
                          "is_attached BOOLEAN NOT NULL," +
-                         "document_type TEXT NOT NULL DEFAULT 'Submitted'," + // Added document_type
+                         "document_type TEXT NOT NULL DEFAULT 'Submitted'," +
                          "FOREIGN KEY (plan_id) REFERENCES plans(id))");
 
             // Then, add document_type column if it doesn't exist (this check is now redundant if the table is always created with it, but good for robustness)
@@ -78,6 +79,16 @@ public class Database {
                          "date TEXT NOT NULL," +
                          "FOREIGN KEY (plan_id) REFERENCES plans(id))");
 
+            // NEW: Create meetings table
+            stmt.execute("CREATE TABLE IF NOT EXISTS meetings (" +
+                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                         "title TEXT NOT NULL," +
+                         "date TEXT NOT NULL," +
+                         "time TEXT NOT NULL," +
+                         "location TEXT NOT NULL," +
+                         "agenda TEXT," +
+                         "status TEXT NOT NULL)"); // Scheduled, Cancelled, Completed
+
             System.out.println("Database initialized successfully.");
 
         } catch (SQLException e) {
@@ -103,7 +114,7 @@ public class Database {
                 {"Director", "director@doclink.com", "password", "Director"},
                 {"Structural Engineer", "structural@doclink.com", "password", "Structural"},
                 {"Client User", "client@doclink.com", "password", "Client"},
-                {"Admin User", "admin@doclink.com", "password", "Admin"} // New Admin User
+                {"Admin User", "admin@doclink.com", "password", "Admin"}
             };
 
             for (String[] user : users) {
@@ -268,6 +279,52 @@ public class Database {
             }
         } catch (SQLException e) {
             System.err.println("Error getting recent logs: " + e.getMessage());
+        }
+        return logs;
+    }
+
+    // New method to get all logs
+    public static List<Log> getAllLogs() {
+        List<Log> logs = new ArrayList<>();
+        String sql = "SELECT id, plan_id, from_role, to_role, action, remarks, date FROM logs ORDER BY date DESC, id DESC";
+        try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                logs.add(new Log(
+                    rs.getInt("id"),
+                    rs.getInt("plan_id"),
+                    rs.getString("from_role"),
+                    rs.getString("to_role"),
+                    rs.getString("action"),
+                    rs.getString("remarks"),
+                    LocalDate.parse(rs.getString("date"))
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting all logs: " + e.getMessage());
+        }
+        return logs;
+    }
+
+    // New method to get all logs for a specific plan ID
+    public static List<Log> getLogsByPlanId(int planId) {
+        List<Log> logs = new ArrayList<>();
+        String sql = "SELECT id, plan_id, from_role, to_role, action, remarks, date FROM logs WHERE plan_id = ? ORDER BY date DESC, id DESC";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, planId);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                logs.add(new Log(
+                    rs.getInt("id"),
+                    rs.getInt("plan_id"),
+                    rs.getString("from_role"),
+                    rs.getString("to_role"),
+                    rs.getString("action"),
+                    rs.getString("remarks"),
+                    LocalDate.parse(rs.getString("date"))
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting logs by plan ID: " + e.getMessage());
         }
         return logs;
     }
@@ -467,7 +524,7 @@ public class Database {
         return plans;
     }
 
-    // --- New Admin Panel Database Methods ---
+    // --- Admin Panel Database Methods ---
 
     public static List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
@@ -535,6 +592,43 @@ public class Database {
         return false;
     }
 
+    public static boolean updateUserPassword(int userId, String newPassword) {
+        String sql = "UPDATE users SET password = ? WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newPassword);
+            pstmt.setInt(2, userId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("User " + userId + " password updated.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error updating user password: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static boolean updateUserNameAndEmail(int userId, String newName, String newEmail) {
+        String sql = "UPDATE users SET name = ?, email = ? WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newName);
+            pstmt.setString(2, newEmail);
+            pstmt.setInt(3, userId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("User " + userId + " name and email updated.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error updating user name and email: " + e.getMessage());
+            if (e.getMessage().contains("UNIQUE constraint failed: users.email")) {
+                JOptionPane.showMessageDialog(null, "Error: The email '" + newEmail + "' is already in use by another user.", "Update Failed", JOptionPane.ERROR_MESSAGE);
+            }
+            return false;
+        }
+        return false;
+    }
+
     public static boolean deletePlanAndRelatedData(int planId) {
         String deleteDocumentsSql = "DELETE FROM documents WHERE plan_id = ?";
         String deleteBillingSql = "DELETE FROM billing WHERE plan_id = ?";
@@ -575,5 +669,123 @@ public class Database {
             }
         }
         return false;
+    }
+
+    // --- Meeting Management Methods ---
+
+    public static boolean addMeeting(Meeting meeting) {
+        String sql = "INSERT INTO meetings (title, date, time, location, agenda, status) VALUES (?, ?, ?, ?, ?, ?)";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setString(1, meeting.getTitle());
+            pstmt.setString(2, meeting.getDate().toString());
+            pstmt.setString(3, meeting.getTime());
+            pstmt.setString(4, meeting.getLocation());
+            pstmt.setString(5, meeting.getAgenda());
+            pstmt.setString(6, meeting.getStatus());
+            pstmt.executeUpdate();
+            ResultSet rs = pstmt.getGeneratedKeys();
+            if (rs.next()) {
+                meeting.setId(rs.getInt(1));
+            }
+            System.out.println("Meeting '" + meeting.getTitle() + "' added successfully.");
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error adding meeting: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public static Meeting getMeetingById(int meetingId) {
+        String sql = "SELECT * FROM meetings WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, meetingId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return new Meeting(
+                    rs.getInt("id"),
+                    rs.getString("title"),
+                    LocalDate.parse(rs.getString("date")),
+                    rs.getString("time"),
+                    rs.getString("location"),
+                    rs.getString("agenda"),
+                    rs.getString("status")
+                );
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting meeting by ID: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static List<Meeting> getAllMeetings() {
+        List<Meeting> meetings = new ArrayList<>();
+        String sql = "SELECT * FROM meetings ORDER BY date DESC, time DESC";
+        try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                meetings.add(new Meeting(
+                    rs.getInt("id"),
+                    rs.getString("title"),
+                    LocalDate.parse(rs.getString("date")),
+                    rs.getString("time"),
+                    rs.getString("location"),
+                    rs.getString("agenda"),
+                    rs.getString("status")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting all meetings: " + e.getMessage());
+        }
+        return meetings;
+    }
+
+    public static boolean updateMeeting(Meeting meeting) {
+        String sql = "UPDATE meetings SET title = ?, date = ?, time = ?, location = ?, agenda = ?, status = ? WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, meeting.getTitle());
+            pstmt.setString(2, meeting.getDate().toString());
+            pstmt.setString(3, meeting.getTime());
+            pstmt.setString(4, meeting.getLocation());
+            pstmt.setString(5, meeting.getAgenda());
+            pstmt.setString(6, meeting.getStatus());
+            pstmt.setInt(7, meeting.getId());
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("Meeting " + meeting.getId() + " updated successfully.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error updating meeting: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static boolean deleteMeeting(int meetingId) {
+        String sql = "DELETE FROM meetings WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, meetingId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("Meeting " + meetingId + " deleted successfully.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error deleting meeting: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static int getUpcomingMeetingsCount() {
+        int count = 0;
+        String sql = "SELECT COUNT(*) FROM meetings WHERE date >= ? AND status = 'Scheduled'";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, LocalDate.now().toString());
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                count = rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting upcoming meetings count: " + e.getMessage());
+        }
+        return count;
     }
 }

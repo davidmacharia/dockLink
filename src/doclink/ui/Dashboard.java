@@ -1,11 +1,12 @@
 package doclink.ui;
 
 import doclink.models.User;
-import doclink.ui.panels.admin.AdminDashboardPanel; // New import
-import doclink.ui.panels.admin.AdminRejectedPlansPanel; // New import
-import doclink.ui.panels.admin.AdminUserManagementPanel; // New import
+import doclink.ui.panels.admin.AdminDashboardPanel;
+import doclink.ui.panels.admin.AdminRejectedPlansPanel;
+import doclink.ui.panels.admin.AdminUserManagementPanel;
 import doclink.ui.panels.client.ClientDashboardPanel;
 import doclink.ui.panels.client.ClientNewPlanPanel;
+import doclink.ui.panels.committee.CommitteeMeetingsPanel; // NEW: Import CommitteeMeetingsPanel
 import doclink.ui.panels.committee.CommitteeReviewPanel;
 import doclink.ui.panels.director.DirectorAllPlansPanel;
 import doclink.ui.panels.director.DirectorReviewPanel;
@@ -14,11 +15,9 @@ import doclink.ui.panels.planning.PlanningFilesPanel;
 import doclink.ui.panels.planning.PlanningReviewPanel;
 import doclink.ui.panels.planning.PlanningReportsPanel;
 import doclink.ui.panels.reception.ReceptionAllPlansPanel;
-import doclink.ui.panels.reception.ReceptionClientCommunicationPanel;
-import doclink.ui.panels.reception.ReceptionDirectorDecisionsPanel;
-import doclink.ui.panels.reception.ReceptionPaymentPanel;
 import doclink.ui.panels.reception.ReceptionSubmissionPanel;
 import doclink.ui.panels.structural.StructuralReviewPanel;
+import doclink.ui.panels.SettingsPanel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -82,6 +81,11 @@ public class Dashboard extends JFrame {
 
         initializeAllPanels();
 
+        // Add all initialized panels to the contentPanel
+        for (Map.Entry<String, JPanel> entry : functionalPanels.entrySet()) {
+            contentPanel.add(entry.getValue(), entry.getKey());
+        }
+
         rightHandContentPanel.add(contentPanel, BorderLayout.CENTER);
         dashboardMainContent.add(rightHandContentPanel, BorderLayout.CENTER);
         mainPanel.add(dashboardMainContent, BorderLayout.CENTER);
@@ -117,9 +121,6 @@ public class Dashboard extends JFrame {
             case "Reception":
                 addSidebarButton(sidebar, "New Plan Submission", "ReceptionSubmissionPanel");
                 addSidebarButton(sidebar, "All Plans", "ReceptionAllPlansPanel");
-                addSidebarButton(sidebar, "Payment Processing", "ReceptionPaymentPanel");
-                addSidebarButton(sidebar, "Director Decisions", "ReceptionDirectorDecisionsPanel");
-                addSidebarButton(sidebar, "Client Communication", "ReceptionClientCommunicationPanel");
                 break;
             case "Planning":
                 addSidebarButton(sidebar, "Plan Review", "PlanningReviewPanel");
@@ -128,7 +129,7 @@ public class Dashboard extends JFrame {
                 break;
             case "Committee":
                 addSidebarButton(sidebar, "Plan Review", "CommitteeReviewPanel");
-                addSidebarButton(sidebar, "Meetings", "CommitteeMeetingsPanel");
+                addSidebarButton(sidebar, "Meetings", "CommitteeMeetingsPanel"); // NEW: Added Meetings button
                 break;
             case "Director":
                 addSidebarButton(sidebar, "Plan Review", "DirectorReviewPanel");
@@ -164,7 +165,8 @@ public class Dashboard extends JFrame {
         button.setBorderPainted(false);
         button.setContentAreaFilled(false);
         button.setOpaque(false);
-        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setAlignmentX(Component.LEFT_ALIGNMENT); // Align the button component to the left
+        button.setHorizontalAlignment(SwingConstants.LEFT); // Align text within the button to the left
         button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
@@ -207,18 +209,6 @@ public class Dashboard extends JFrame {
         functionalPanels.put("ReceptionAllPlansPanel", receptionAllPlansPanel);
         refreshablePanels.put("ReceptionAllPlansPanel", receptionAllPlansPanel);
 
-        ReceptionPaymentPanel receptionPaymentPanel = new ReceptionPaymentPanel(currentUser, this, cardsPanel);
-        functionalPanels.put("ReceptionPaymentPanel", receptionPaymentPanel);
-        refreshablePanels.put("ReceptionPaymentPanel", receptionPaymentPanel);
-
-        ReceptionDirectorDecisionsPanel receptionDirectorDecisionsPanel = new ReceptionDirectorDecisionsPanel(currentUser, this, cardsPanel);
-        functionalPanels.put("ReceptionDirectorDecisionsPanel", receptionDirectorDecisionsPanel);
-        refreshablePanels.put("ReceptionDirectorDecisionsPanel", receptionDirectorDecisionsPanel);
-
-        ReceptionClientCommunicationPanel receptionClientCommunicationPanel = new ReceptionClientCommunicationPanel(currentUser, this, cardsPanel);
-        functionalPanels.put("ReceptionClientCommunicationPanel", receptionClientCommunicationPanel);
-        refreshablePanels.put("ReceptionClientCommunicationPanel", receptionClientCommunicationPanel);
-
         // Planning Panels
         PlanningReviewPanel planningReviewPanel = new PlanningReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("PlanningReviewPanel", planningReviewPanel);
@@ -236,7 +226,10 @@ public class Dashboard extends JFrame {
         CommitteeReviewPanel committeeReviewPanel = new CommitteeReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("CommitteeReviewPanel", committeeReviewPanel);
         refreshablePanels.put("CommitteeReviewPanel", committeeReviewPanel);
-        functionalPanels.put("CommitteeMeetingsPanel", createPlaceholderPanel("Committee Meetings View"));
+        
+        CommitteeMeetingsPanel committeeMeetingsPanel = new CommitteeMeetingsPanel(currentUser, this, cardsPanel); // NEW: Instantiate
+        functionalPanels.put("CommitteeMeetingsPanel", committeeMeetingsPanel); // NEW: Add to map
+        refreshablePanels.put("CommitteeMeetingsPanel", committeeMeetingsPanel); // NEW: Add to refreshable map
 
         // Director Panels
         DirectorReviewPanel directorReviewPanel = new DirectorReviewPanel(currentUser, this, cardsPanel);
@@ -280,11 +273,9 @@ public class Dashboard extends JFrame {
         refreshablePanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
 
         // Common Panels
-        functionalPanels.put("SettingsPanel", createPlaceholderPanel("Settings View"));
-
-        for (Map.Entry<String, JPanel> entry : functionalPanels.entrySet()) {
-            contentPanel.add(entry.getValue(), entry.getKey());
-        }
+        SettingsPanel settingsPanel = new SettingsPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("SettingsPanel", settingsPanel);
+        refreshablePanels.put("SettingsPanel", settingsPanel);
     }
 
     private JPanel createPlaceholderPanel(String text) {
@@ -307,10 +298,10 @@ public class Dashboard extends JFrame {
                 defaultPanelName = "PlanningReviewPanel";
                 break;
             case "Committee":
-                defaultPanelName = "CommitteeReviewPanel";
+                defaultPanelName = "CommitteeReviewPanel"; // Default to review panel
                 break;
             case "Director":
-                defaultPanelName = "DirectorReviewPanel"; // Default to review panel
+                defaultPanelName = "DirectorReviewPanel";
                 break;
             case "Structural":
                 defaultPanelName = "StructuralReviewPanel";
@@ -318,7 +309,7 @@ public class Dashboard extends JFrame {
             case "Client":
                 defaultPanelName = "ClientDashboardPanel";
                 break;
-            case "Admin": // New Admin Default
+            case "Admin":
                 defaultPanelName = "AdminDashboardPanel";
                 break;
             default:

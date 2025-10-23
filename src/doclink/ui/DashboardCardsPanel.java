@@ -1,5 +1,7 @@
 package doclink.ui;
 
+import doclink.Database; // Added import
+
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
@@ -7,10 +9,11 @@ import java.util.List;
 
 public class DashboardCardsPanel extends JPanel {
     private List<JPanel> cards; // Store references to the cards
+    private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
 
     public DashboardCardsPanel() {
         setLayout(new GridLayout(1, 3, 20, 0)); // 1 row, 3 columns, 20px horizontal gap
-        setBackground(new Color(245, 247, 250)); // Very light grey
+        setBackground(new Color(245, 247, 250)); // Reverted to light grey
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20)); // Padding
 
         cards = new ArrayList<>();

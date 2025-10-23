@@ -1,6 +1,6 @@
 package doclink.ui.panels.reception;
 
-import doclink.Database;
+import doclink.Database; // Added import
 import doclink.models.Billing;
 import doclink.models.Document;
 import doclink.models.Log;
@@ -207,9 +207,10 @@ public class ReceptionPaymentPanel extends JPanel implements Dashboard.Refreshab
                     receiptNoField.setText("");
                 }
 
-                // Enable button only if status is "Awaiting Payment" and no receipt is attached yet
+                // Enable button only if status is "Awaiting Payment" AND no receipt is attached yet
                 boolean isAwaitingPayment = selectedPlanForPayment.getStatus().equals("Awaiting Payment");
-                attachReceiptButton.setEnabled(isAwaitingPayment && (billing == null || billing.getReceiptNo() == null));
+                boolean hasReceiptAttached = (billing != null && billing.getReceiptNo() != null && !billing.getReceiptNo().isEmpty());
+                attachReceiptButton.setEnabled(isAwaitingPayment && !hasReceiptAttached);
                 paymentViewDocumentsButton.setEnabled(true); // Always enable view documents if a plan is selected
             }
         }
@@ -241,8 +242,9 @@ public class ReceptionPaymentPanel extends JPanel implements Dashboard.Refreshab
         boolean success = Database.updateBillingPayment(billing.getId(), receiptNo);
 
         if (success) {
-            Database.updatePlanStatus(selectedPlanForPayment.getId(), "Payment Received", "Payment received with receipt: " + receiptNo);
-            Database.addLog(new Log(selectedPlanForPayment.getId(), currentUser.getRole(), "Planning", "Payment Received", "Receipt No: " + receiptNo));
+            // Directly forward to Planning after payment
+            Database.updatePlanStatus(selectedPlanForPayment.getId(), "Under Review (Planning)", "Payment received with receipt: " + receiptNo + ". Forwarded to Planning.");
+            Database.addLog(new Log(selectedPlanForPayment.getId(), currentUser.getRole(), "Planning", "Payment Received & Forwarded", "Receipt No: " + receiptNo));
 
             // Add the receipt as a document
             String receiptDocName = "Payment Receipt";
