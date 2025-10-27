@@ -1,6 +1,6 @@
 package doclink.ui.panels.client;
 
-import doclink.Database;
+import doclink.Database; // Added import
 import doclink.models.Document;
 import doclink.models.Log;
 import doclink.models.Plan;
@@ -186,7 +186,7 @@ public class ClientDashboardPanel extends JPanel implements Dashboard.Refreshabl
     private void loadSelectedPlanDetails() {
         int selectedRow = tablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
-            int planId = (int) tablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            int planId = (int) tablePanel.getPlansTable().getValueAt(selectedRow, 1); // Corrected index to 1
             selectedPlan = Database.getPlanById(planId);
 
             if (selectedPlan != null) {

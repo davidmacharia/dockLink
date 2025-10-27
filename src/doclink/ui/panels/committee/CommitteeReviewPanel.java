@@ -1,6 +1,6 @@
 package doclink.ui.panels.committee;
 
-import doclink.Database;
+import doclink.Database; // Added import
 import doclink.models.Log;
 import doclink.models.Plan;
 import doclink.models.User;
@@ -25,7 +25,8 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
 
     // Plan details panel components
     private JLabel planIdLabel, applicantNameLabel, plotNoLabel, statusLabel;
-    private JTextArea remarksArea;
+    private JTextArea planRemarksDisplayArea; // NEW: To display existing remarks of the plan (read-only)
+    private JTextArea remarksArea; // For new remarks related to the current action
     private JButton approveToDirectorButton, rejectToPlanningButton, deferToPlanningButton;
 
     private Plan selectedPlan;
@@ -108,7 +109,20 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
         statusLabel = new JLabel("N/A");
         panel.add(statusLabel, gbc);
 
-        // Remarks for action
+        // Existing Plan Remarks (read-only)
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("Plan Remarks:"), gbc);
+        gbc.gridy++;
+        planRemarksDisplayArea = new JTextArea(3, 20);
+        planRemarksDisplayArea.setEditable(false); // Make it read-only
+        planRemarksDisplayArea.setLineWrap(true);
+        planRemarksDisplayArea.setWrapStyleWord(true);
+        JScrollPane scrollPanePlanRemarks = new JScrollPane(planRemarksDisplayArea);
+        panel.add(scrollPanePlanRemarks, gbc);
+
+        // Remarks for action (editable)
         gbc.gridx = 0;
         gbc.gridy++;
         gbc.gridwidth = 2;
@@ -169,7 +183,7 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
     private void loadSelectedPlanDetails() {
         int selectedRow = tablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
-            int planId = (int) tablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            int planId = (int) tablePanel.getPlansTable().getValueAt(selectedRow, 1); // Corrected index to 1
             selectedPlan = Database.getPlanById(planId);
 
             if (selectedPlan != null) {
@@ -177,6 +191,7 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
                 applicantNameLabel.setText(selectedPlan.getApplicantName());
                 plotNoLabel.setText(selectedPlan.getPlotNo());
                 statusLabel.setText(selectedPlan.getStatus());
+                planRemarksDisplayArea.setText(selectedPlan.getRemarks() != null ? selectedPlan.getRemarks() : "No remarks."); // NEW: Display existing remarks
                 remarksArea.setText(""); // Clear remarks for new action
 
                 // Enable/disable buttons based on status
@@ -187,6 +202,8 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
                 rejectToPlanningButton.setEnabled(isUnderReviewCommittee || isApprovedByStructural);
                 deferToPlanningButton.setEnabled(isUnderReviewCommittee || isApprovedByStructural);
             }
+        } else {
+            clearDetails(); // Clear details if no row is selected
         }
     }
 
@@ -263,6 +280,7 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
         applicantNameLabel.setText("N/A");
         plotNoLabel.setText("N/A");
         statusLabel.setText("N/A");
+        planRemarksDisplayArea.setText(""); // NEW: Clear existing remarks
         remarksArea.setText("");
         approveToDirectorButton.setEnabled(false);
         rejectToPlanningButton.setEnabled(false);
@@ -281,7 +299,7 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
         int returnedPlans = Database.getPlansByStatus("Rejected").size() + Database.getPlansByStatus("Deferred").size(); // Plans rejected/deferred by committee
 
         cardsPanel.updateCard(0, "Plans for Committee Review", plansForReviewCount, new Color(255, 193, 7)); // Yellow
-        cardsPanel.updateCard(1, "Approved (to Director)", approvedToDirector, new Color(40, 167, 69)); // Green
+        cardsPanel.updateCard(1, "Upcoming Meetings", Database.getUpcomingMeetingsCount(), new Color(0, 123, 255)); // Blue for meetings
         cardsPanel.updateCard(2, "Rejected/Deferred", returnedPlans, new Color(220, 53, 69)); // Red
 
         // Update table with plans for Committee review

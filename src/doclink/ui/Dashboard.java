@@ -11,6 +11,7 @@ import doclink.ui.panels.committee.CommitteeReviewPanel;
 import doclink.ui.panels.director.DirectorAllPlansPanel;
 import doclink.ui.panels.director.DirectorReviewPanel;
 import doclink.ui.panels.director.DirectorReportsPanel;
+import doclink.ui.panels.planning.PlanningChecklistManagementPanel; // NEW: Import PlanningChecklistManagementPanel
 import doclink.ui.panels.planning.PlanningFilesPanel;
 import doclink.ui.panels.planning.PlanningReviewPanel;
 import doclink.ui.panels.planning.PlanningReportsPanel;
@@ -126,6 +127,7 @@ public class Dashboard extends JFrame {
                 addSidebarButton(sidebar, "Plan Review", "PlanningReviewPanel");
                 addSidebarButton(sidebar, "Files", "PlanningFilesPanel");
                 addSidebarButton(sidebar, "Reports", "PlanningReportsPanel");
+                addSidebarButton(sidebar, "Checklist Management", "PlanningChecklistManagementPanel"); // NEW: Added Checklist Management button
                 break;
             case "Committee":
                 addSidebarButton(sidebar, "Plan Review", "CommitteeReviewPanel");
@@ -221,6 +223,10 @@ public class Dashboard extends JFrame {
         PlanningReportsPanel planningReportsPanel = new PlanningReportsPanel(currentUser, this, cardsPanel);
         functionalPanels.put("PlanningReportsPanel", planningReportsPanel);
         refreshablePanels.put("PlanningReportsPanel", planningReportsPanel);
+
+        PlanningChecklistManagementPanel planningChecklistManagementPanel = new PlanningChecklistManagementPanel(currentUser, this, cardsPanel); // NEW: Instantiate
+        functionalPanels.put("PlanningChecklistManagementPanel", planningChecklistManagementPanel); // NEW: Add to map
+        refreshablePanels.put("PlanningChecklistManagementPanel", planningChecklistManagementPanel); // NEW: Add to refreshable map
 
         // Committee Panels
         CommitteeReviewPanel committeeReviewPanel = new CommitteeReviewPanel(currentUser, this, cardsPanel);

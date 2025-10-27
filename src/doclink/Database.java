@@ -89,11 +89,25 @@ public class Database {
                          "agenda TEXT," +
                          "status TEXT NOT NULL)"); // Scheduled, Cancelled, Completed
 
+            // NEW: Create document_checklist_items table
+            stmt.execute("CREATE TABLE IF NOT EXISTS document_checklist_items (" +
+                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                         "item_name TEXT UNIQUE NOT NULL," +
+                         "is_required BOOLEAN NOT NULL DEFAULT 1," +
+                         "requires_file_upload BOOLEAN NOT NULL DEFAULT 0)"); // NEW: Default to not requiring file upload
+
+            // Add column if it doesn't exist (for existing databases)
+            if (!columnExists(conn, "document_checklist_items", "requires_file_upload")) {
+                stmt.execute("ALTER TABLE document_checklist_items ADD COLUMN requires_file_upload BOOLEAN NOT NULL DEFAULT 0");
+            }
+
             System.out.println("Database initialized successfully.");
 
         } catch (SQLException e) {
             System.err.println("Error initializing database: " + e.getMessage());
         }
+        // Ensure demo checklist items are added after table creation
+        addDemoChecklistItems();
     }
 
     private static boolean columnExists(Connection conn, String tableName, String columnName) throws SQLException {
@@ -114,7 +128,8 @@ public class Database {
                 {"Director", "director@doclink.com", "password", "Director"},
                 {"Structural Engineer", "structural@doclink.com", "password", "Structural"},
                 {"Client User", "client@doclink.com", "password", "Client"},
-                {"Admin User", "admin@doclink.com", "password", "Admin"}
+                {"Admin User", "admin@doclink.com", "password", "Admin"},
+                {"Developer User", "developer@doclink.com", "password", "Developer"} // NEW: Developer User
             };
 
             for (String[] user : users) {
@@ -127,6 +142,33 @@ public class Database {
             System.out.println("Demo users added/ensured.");
         } catch (SQLException e) {
             System.err.println("Error adding demo users: " + e.getMessage());
+        }
+    }
+
+    // NEW: Add demo checklist items
+    public static void addDemoChecklistItems() {
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(
+             "INSERT OR IGNORE INTO document_checklist_items (item_name, is_required, requires_file_upload) VALUES (?, ?, ?)")) {
+
+            // Updated demo items with requires_file_upload
+            Object[][] items = {
+                {"Site Plan", true, true},
+                {"Title Deed", true, true},
+                {"Architectural Drawings", true, true},
+                {"Structural Drawings", false, true}, // Optional, but requires file if provided
+                {"Environmental Impact Assessment", false, false}, // Optional, no file needed (e.g., verbal confirmation)
+                {"Fire Safety Report", false, false} // Optional, no file needed
+            };
+
+            for (Object[] item : items) {
+                pstmt.setString(1, (String) item[0]);
+                pstmt.setBoolean(2, (Boolean) item[1]);
+                pstmt.setBoolean(3, (Boolean) item[2]); // NEW: Set requires_file_upload
+                pstmt.executeUpdate();
+            }
+            System.out.println("Demo checklist items added/ensured.");
+        } catch (SQLException e) {
+            System.err.println("Error adding demo checklist items: " + e.getMessage());
         }
     }
 
@@ -787,5 +829,80 @@ public class Database {
             System.err.println("Error getting upcoming meetings count: " + e.getMessage());
         }
         return count;
+    }
+
+    // --- Document Checklist Item Management Methods ---
+
+    public static boolean addChecklistItem(String itemName, boolean isRequired, boolean requiresFileUpload) {
+        String sql = "INSERT INTO document_checklist_items (item_name, is_required, requires_file_upload) VALUES (?, ?, ?)";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, itemName);
+            pstmt.setBoolean(2, isRequired);
+            pstmt.setBoolean(3, requiresFileUpload); // NEW: Set requires_file_upload
+            pstmt.executeUpdate();
+            System.out.println("Checklist item '" + itemName + "' added successfully.");
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error adding checklist item: " + e.getMessage());
+            if (e.getMessage().contains("UNIQUE constraint failed: document_checklist_items.item_name")) {
+                JOptionPane.showMessageDialog(null, "Error: A checklist item with this name already exists.", "Add Item Failed", JOptionPane.ERROR_MESSAGE);
+            }
+            return false;
+        }
+    }
+
+    public static List<DocumentChecklistItem> getAllChecklistItems() {
+        List<DocumentChecklistItem> items = new ArrayList<>();
+        String sql = "SELECT id, item_name, is_required, requires_file_upload FROM document_checklist_items ORDER BY item_name";
+        try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                items.add(new DocumentChecklistItem(
+                    rs.getInt("id"),
+                    rs.getString("item_name"),
+                    rs.getBoolean("is_required"),
+                    rs.getBoolean("requires_file_upload") // NEW: Retrieve requires_file_upload
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting all checklist items: " + e.getMessage());
+        }
+        return items;
+    }
+
+    public static boolean updateChecklistItem(int id, String newItemName, boolean newIsRequired, boolean newRequiresFileUpload) {
+        String sql = "UPDATE document_checklist_items SET item_name = ?, is_required = ?, requires_file_upload = ? WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newItemName);
+            pstmt.setBoolean(2, newIsRequired);
+            pstmt.setBoolean(3, newRequiresFileUpload); // NEW: Update requires_file_upload
+            pstmt.setInt(4, id);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("Checklist item " + id + " updated successfully.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error updating checklist item: " + e.getMessage());
+            if (e.getMessage().contains("UNIQUE constraint failed: document_checklist_items.item_name")) {
+                JOptionPane.showMessageDialog(null, "Error: A checklist item with the name '" + newItemName + "' already exists.", "Update Item Failed", JOptionPane.ERROR_MESSAGE);
+            }
+            return false;
+        }
+        return false;
+    }
+
+    public static boolean deleteChecklistItem(int id) {
+        String sql = "DELETE FROM document_checklist_items WHERE id = ?";
+        try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, id);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("Checklist item " + id + " deleted successfully.");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error deleting checklist item: " + e.getMessage());
+        }
+        return false;
     }
 }

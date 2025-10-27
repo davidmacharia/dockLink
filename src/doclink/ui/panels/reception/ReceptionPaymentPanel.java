@@ -189,7 +189,7 @@ public class ReceptionPaymentPanel extends JPanel implements Dashboard.Refreshab
     private void loadSelectedPlanForPaymentDetails() {
         int selectedRow = paymentTablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
-            int planId = (int) paymentTablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            int planId = (int) paymentTablePanel.getPlansTable().getValueAt(selectedRow, 1); // Corrected index to 1
             selectedPlanForPayment = Database.getPlanById(planId);
 
             if (selectedPlanForPayment != null) {

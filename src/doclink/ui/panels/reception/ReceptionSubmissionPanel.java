@@ -2,14 +2,22 @@ package doclink.ui.panels.reception;
 
 import doclink.Database;
 import doclink.models.Document;
+import doclink.models.DocumentChecklistItem;
 import doclink.models.Log;
 import doclink.models.Plan;
 import doclink.models.User;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
+import doclink.ui.components.ChecklistItemUploadPanel; // NEW: Import the new component
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,125 +25,162 @@ import java.util.List;
 public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refreshable {
     private User currentUser;
     private Dashboard parentDashboard;
-    private DashboardCardsPanel cardsPanel; // Reference to the main dashboard cards
+    private DashboardCardsPanel cardsPanel;
 
     // Form components for New Plan Submission
     private JTextField applicantNameField;
     private JTextField contactField;
     private JTextField plotNoField;
     private JTextField locationField;
-    private JCheckBox sitePlanCb, titleDeedCb, drawingsCb, otherDocsCb;
+    private JPanel dynamicChecklistPanel;
+    private List<ChecklistItemUploadPanel> checklistItemUploadPanels; // Changed to list of custom panels
     private JTextArea remarksArea;
     private JButton submitPlanButton;
-    private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
+    private static final Color DARK_NAVY = new Color(26, 35, 126);
 
     public ReceptionSubmissionPanel(User user, Dashboard parentDashboard, DashboardCardsPanel cardsPanel) {
         this.currentUser = user;
         this.parentDashboard = parentDashboard;
-        this.cardsPanel = cardsPanel; // Keep a reference to update cards if needed
+        this.cardsPanel = cardsPanel;
         setLayout(new GridBagLayout());
-        setBackground(new Color(245, 247, 250)); // Reverted to light grey
+        setBackground(new Color(245, 247, 250));
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         createFormComponents();
-        refreshData(); // Initial data load for cards
+        refreshData();
     }
 
     private void createFormComponents() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        JPanel mainFormPanel = new JPanel(new GridBagLayout()); // Main panel for the form content
+        mainFormPanel.setBackground(Color.WHITE);
+        mainFormPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(8, 8, 8, 8);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.anchor = GridBagConstraints.WEST;
 
+        // Title
         JLabel title = new JLabel("New Building Plan Submission");
         title.setFont(new Font("Segoe UI", Font.BOLD, 24));
         title.setForeground(DARK_NAVY);
+        title.setHorizontalAlignment(SwingConstants.CENTER);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        gbc.gridwidth = 2;
-        panel.add(title, gbc);
+        gbc.gridwidth = 2; // Span across two conceptual columns
+        mainFormPanel.add(title, gbc);
 
-        // Applicant Details - Arranged side-by-side
-        gbc.gridwidth = 1; // Reset gridwidth for side-by-side
-        int row = 1;
+        // Container for side-by-side layout (Applicant Details and Checklist)
+        JPanel sideBySideContainer = new JPanel(new GridLayout(1, 2, 20, 0)); // 1 row, 2 columns, 20px horizontal gap
+        sideBySideContainer.setOpaque(false); // Inherit background
 
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        panel.add(new JLabel("Applicant Name:"), gbc);
-        gbc.gridx = 1;
-        applicantNameField = new JTextField(25);
-        panel.add(applicantNameField, gbc);
+        // Left Panel: Applicant Details
+        JPanel applicantDetailsPanel = new JPanel(new GridBagLayout());
+        applicantDetailsPanel.setOpaque(false); // Inherit background
+        GridBagConstraints gbcLeft = new GridBagConstraints();
+        gbcLeft.insets = new Insets(5, 5, 5, 5);
+        gbcLeft.fill = GridBagConstraints.HORIZONTAL;
+        gbcLeft.anchor = GridBagConstraints.WEST;
+        gbcLeft.gridx = 0;
+        gbcLeft.gridwidth = 1;
 
-        row++;
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        panel.add(new JLabel("Contact:"), gbc);
-        gbc.gridx = 1;
-        contactField = new JTextField(25);
-        panel.add(contactField, gbc);
+        int row = 0;
+        gbcLeft.gridy = row++;
+        applicantDetailsPanel.add(new JLabel("Applicant Name:"), gbcLeft);
+        gbcLeft.gridx = 1;
+        applicantNameField = new JTextField(20); // Adjusted width
+        applicantDetailsPanel.add(applicantNameField, gbcLeft);
 
-        row++;
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        panel.add(new JLabel("Plot No:"), gbc);
-        gbc.gridx = 1;
-        plotNoField = new JTextField(25);
-        panel.add(plotNoField, gbc);
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = row++;
+        applicantDetailsPanel.add(new JLabel("Contact:"), gbcLeft);
+        gbcLeft.gridx = 1;
+        contactField = new JTextField(20); // Adjusted width
+        applicantDetailsPanel.add(contactField, gbcLeft);
 
-        row++;
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        panel.add(new JLabel("Location:"), gbc);
-        gbc.gridx = 1;
-        locationField = new JTextField(25);
-        panel.add(locationField, gbc);
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = row++;
+        applicantDetailsPanel.add(new JLabel("Plot No:"), gbcLeft);
+        gbcLeft.gridx = 1;
+        plotNoField = new JTextField(20); // Adjusted width
+        applicantDetailsPanel.add(plotNoField, gbcLeft);
 
-        // Document Checklist
-        row++;
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        gbc.gridwidth = 2; // Span two columns for the title
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = row++;
+        applicantDetailsPanel.add(new JLabel("Location:"), gbcLeft);
+        gbcLeft.gridx = 1;
+        locationField = new JTextField(20); // Adjusted width
+        applicantDetailsPanel.add(locationField, gbcLeft);
+        
+        // Add vertical glue to push content to top in its panel
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = row++;
+        gbcLeft.gridwidth = 2;
+        gbcLeft.weighty = 1.0;
+        applicantDetailsPanel.add(Box.createVerticalGlue(), gbcLeft);
+
+
+        // Right Panel: Document Checklist
+        JPanel checklistPanel = new JPanel(new GridBagLayout());
+        checklistPanel.setOpaque(false); // Inherit background
+        GridBagConstraints gbcRight = new GridBagConstraints();
+        gbcRight.insets = new Insets(5, 5, 5, 5);
+        gbcRight.fill = GridBagConstraints.HORIZONTAL;
+        gbcRight.anchor = GridBagConstraints.NORTHWEST; // Align checklist items to top-left
+        gbcRight.gridx = 0;
+        gbcRight.gridwidth = 2; // Checklist title spans 2 columns within its panel
+
+        row = 0;
+        gbcRight.gridy = row++;
         JLabel docTitle = new JLabel("Document Checklist:");
         docTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        docTitle.setBorder(BorderFactory.createEmptyBorder(10, 0, 5, 0));
-        panel.add(docTitle, gbc);
+        docTitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 5, 0));
+        checklistPanel.add(docTitle, gbcRight);
 
-        row++;
-        gbc.gridy = row;
-        JPanel checklistPanel = new JPanel(new GridLayout(0, 2, 10, 5)); // 2 columns, horizontal and vertical gap
-        checklistPanel.setOpaque(false); // Inherit background
-        sitePlanCb = new JCheckBox("Site Plan");
-        titleDeedCb = new JCheckBox("Title Deed");
-        drawingsCb = new JCheckBox("Architectural Drawings");
-        otherDocsCb = new JCheckBox("Other Supporting Documents");
+        gbcRight.gridy = row++;
+        gbcRight.weightx = 1.0;
+        gbcRight.weighty = 1.0; // Allow dynamic checklist panel to expand
+        gbcRight.fill = GridBagConstraints.BOTH;
+        dynamicChecklistPanel = new JPanel(); // Changed to BoxLayout
+        dynamicChecklistPanel.setLayout(new BoxLayout(dynamicChecklistPanel, BoxLayout.Y_AXIS)); // Set BoxLayout
+        dynamicChecklistPanel.setOpaque(false);
         
-        checklistPanel.add(sitePlanCb);
-        checklistPanel.add(titleDeedCb);
-        checklistPanel.add(drawingsCb);
-        checklistPanel.add(otherDocsCb);
-        panel.add(checklistPanel, gbc); // Add the checklist panel
+        JScrollPane checklistScrollPane = new JScrollPane(dynamicChecklistPanel); // Wrap in JScrollPane
+        checklistScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        checklistScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        checklistScrollPane.setBorder(BorderFactory.createEmptyBorder()); // Remove border from scroll pane
+        checklistScrollPane.getViewport().setBackground(Color.WHITE); // Set viewport background to white
+        checklistPanel.add(checklistScrollPane, gbcRight); // Add scroll pane to checklistPanel
+
+        // Add left and right panels to the sideBySideContainer
+        sideBySideContainer.add(applicantDetailsPanel);
+        sideBySideContainer.add(checklistPanel);
+
+        // Add the sideBySideContainer to the main form panel
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0; // Allow this section to expand
+        gbc.fill = GridBagConstraints.BOTH;
+        mainFormPanel.add(sideBySideContainer, gbc);
 
         // Remarks
-        row++;
         gbc.gridx = 0;
-        gbc.gridy = row;
+        gbc.gridy = 2; // Next row after side-by-side container
         gbc.gridwidth = 2;
-        panel.add(new JLabel("Remarks:"), gbc);
-        row++;
-        gbc.gridy = row;
+        gbc.weighty = 0; // Don't expand
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        mainFormPanel.add(new JLabel("Remarks:"), gbc);
+        gbc.gridy = 3;
         remarksArea = new JTextArea(5, 25);
         remarksArea.setLineWrap(true);
         remarksArea.setWrapStyleWord(true);
         JScrollPane scrollPane = new JScrollPane(remarksArea);
-        panel.add(scrollPane, gbc);
+        mainFormPanel.add(scrollPane, gbc);
 
         // Submit Button
-        row++;
-        gbc.gridy = row;
+        gbc.gridy = 4;
         submitPlanButton = new JButton("Submit Plan");
         submitPlanButton.setFont(new Font("Segoe UI", Font.BOLD, 16));
         submitPlanButton.setBackground(new Color(0, 123, 255));
@@ -150,10 +195,29 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
             public void mouseExited(java.awt.event.MouseEvent evt) { submitPlanButton.setBackground(new Color(0, 123, 255)); }
         });
         submitPlanButton.addActionListener(e -> submitNewPlan());
-        panel.add(submitPlanButton, gbc);
+        mainFormPanel.add(submitPlanButton, gbc);
 
-        // Add the form panel to this panel, centered
-        add(panel, new GridBagConstraints());
+        // Add the main form panel to this panel, centered
+        GridBagConstraints outerGbc = new GridBagConstraints();
+        outerGbc.fill = GridBagConstraints.BOTH;
+        outerGbc.weightx = 1.0;
+        outerGbc.weighty = 1.0;
+        add(mainFormPanel, outerGbc);
+    }
+
+    private void loadDynamicChecklist() {
+        dynamicChecklistPanel.removeAll();
+        checklistItemUploadPanels = new ArrayList<>();
+
+        List<DocumentChecklistItem> items = Database.getAllChecklistItems();
+        for (DocumentChecklistItem item : items) {
+            ChecklistItemUploadPanel itemPanel = new ChecklistItemUploadPanel(item);
+            checklistItemUploadPanels.add(itemPanel);
+            dynamicChecklistPanel.add(itemPanel);
+            dynamicChecklistPanel.add(Box.createVerticalStrut(5)); // Add spacing between items
+        }
+        dynamicChecklistPanel.revalidate();
+        dynamicChecklistPanel.repaint();
     }
 
     private void submitNewPlan() {
@@ -169,35 +233,95 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
         }
 
         List<Document> documents = new ArrayList<>();
-        boolean allAttached = true;
-        if (sitePlanCb.isSelected()) documents.add(new Document("Site Plan", null, true)); else allAttached = false;
-        if (titleDeedCb.isSelected()) documents.add(new Document("Title Deed", null, true)); else allAttached = false;
-        if (drawingsCb.isSelected()) documents.add(new Document("Architectural Drawings", null, true)); else allAttached = false;
-        if (otherDocsCb.isSelected()) documents.add(new Document("Other Documents", null, true)); else allAttached = false;
+        boolean allRequiredAttached = true;
 
-        if (!allAttached) {
-            int confirm = JOptionPane.showConfirmDialog(this, "Some documents are not attached. Do you want to proceed and return to applicant?", "Incomplete Submission", JOptionPane.YES_NO_OPTION);
+        // First, create the plan to get its ID, which is needed for document storage
+        Plan newPlan = new Plan(applicantName, contact, plotNo, location, LocalDate.now(), "Submitted", remarks);
+        Database.addPlan(newPlan, new ArrayList<>()); // Add plan first without documents
+
+        if (newPlan.getId() == 0) { // Check if plan was successfully added and ID assigned
+            JOptionPane.showMessageDialog(this, "Failed to create new plan in the database.", "Database Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Create a directory for this plan's documents
+        String documentsDir = System.getProperty("user.home") + "/DocLink_Documents/Plan_" + newPlan.getId() + "/";
+        File dir = new File(documentsDir);
+        if (!dir.exists()) {
+            dir.mkdirs(); // Create the directory if it doesn't exist
+        }
+
+        for (ChecklistItemUploadPanel itemPanel : checklistItemUploadPanels) {
+            DocumentChecklistItem item = itemPanel.getChecklistItem();
+            boolean isAttached = itemPanel.isAttached();
+            String originalFilePath = itemPanel.getOriginalFilePath(); // Get the original path
+
+            if (item.isRequired() && !isAttached) {
+                allRequiredAttached = false;
+            }
+            
+            // Only process if attached (either by file upload or manual check for optional)
+            if (isAttached) {
+                String savedFilePath = null;
+                if (item.requiresFileUpload() && originalFilePath != null) {
+                    // If file upload is required and a file was selected, copy it
+                    File originalFile = new File(originalFilePath);
+                    if (originalFile.exists()) {
+                        Path targetPath = Paths.get(documentsDir, originalFile.getName());
+                        try {
+                            Files.copy(originalFile.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+                            savedFilePath = targetPath.toString();
+                        } catch (IOException e) {
+                            System.err.println("Error copying file: " + e.getMessage());
+                            JOptionPane.showMessageDialog(this, "Error saving document '" + originalFile.getName() + "'.", "File Save Error", JOptionPane.ERROR_MESSAGE);
+                            // Decide whether to abort or continue with a null path
+                            savedFilePath = null; 
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Selected file '" + originalFile.getName() + "' not found.", "File Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else if (!item.requiresFileUpload()) {
+                    // If no file upload is required, but it's marked as attached, store a placeholder path
+                    savedFilePath = "N/A (No file upload required)";
+                }
+
+                if (savedFilePath != null) {
+                    documents.add(new Document(newPlan.getId(), item.getItemName(), savedFilePath, "Submitted"));
+                }
+            }
+        }
+
+        // Now add all collected documents to the database for the new plan
+        for (Document doc : documents) {
+            Database.addDocument(doc);
+        }
+
+        if (!allRequiredAttached) {
+            int confirm = JOptionPane.showConfirmDialog(this, "Some required documents are not attached. Do you want to proceed and return to applicant?", "Incomplete Submission", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
-                JOptionPane.showMessageDialog(this, "Plan marked as incomplete and returned to applicant.", "Submission Info", JOptionPane.INFORMATION_MESSAGE);
+                // Update plan status to reflect incomplete submission
+                Database.updatePlanStatus(newPlan.getId(), "Client Notified (Awaiting Resubmission)", "Incomplete submission: Missing required documents. Client needs to resubmit.");
+                Database.addLog(new Log(newPlan.getId(), currentUser.getRole(), "Client", "Incomplete Submission", "Missing required documents."));
+                JOptionPane.showMessageDialog(this, "Plan marked as incomplete and client notified for resubmission.", "Submission Info", JOptionPane.INFORMATION_MESSAGE);
                 clearSubmissionForm();
                 refreshData();
                 return;
             } else {
-                return; // Stay on form
+                // If user chooses not to proceed, delete the partially created plan and documents
+                Database.deletePlanAndRelatedData(newPlan.getId());
+                JOptionPane.showMessageDialog(this, "Submission cancelled. Plan and associated data deleted.", "Submission Cancelled", JOptionPane.INFORMATION_MESSAGE);
+                clearSubmissionForm();
+                refreshData();
+                return;
             }
         }
 
-        // If complete, forward to Planning Department
-        Plan newPlan = new Plan(applicantName, contact, plotNo, location, LocalDate.now(), "Under Review (Planning)", remarks);
-        Database.addPlan(newPlan, documents);
-
-        // Log the action
+        // If all required documents are attached (or user chose to proceed with incomplete), log and finalize
         Database.addLog(new Log(newPlan.getId(), currentUser.getRole(), "Planning", "Forwarded for Review", "Initial submission, documents verified."));
 
         JOptionPane.showMessageDialog(this, "Plan submitted successfully and forwarded to Planning Department.", "Submission Success", JOptionPane.INFORMATION_MESSAGE);
         clearSubmissionForm();
         refreshData();
-        // No need to call parentDashboard.showRoleDashboard("Reception") here, as we are already in Reception's context
     }
 
     private void clearSubmissionForm() {
@@ -206,15 +330,13 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
         plotNoField.setText("");
         locationField.setText("");
         remarksArea.setText("");
-        sitePlanCb.setSelected(false);
-        titleDeedCb.setSelected(false);
-        drawingsCb.setSelected(false);
-        otherDocsCb.setSelected(false);
+        for (ChecklistItemUploadPanel itemPanel : checklistItemUploadPanels) {
+            itemPanel.clearButton.doClick(); // Simulate clicking clear button on each item
+        }
     }
 
     @Override
     public void refreshData() {
-        // Update cards with relevant counts for Reception
         int pending = Database.getPlansByStatus("Submitted").size() +
                       Database.getPlansByStatus("Awaiting Payment").size() +
                       Database.getPlansByStatus("Under Review (Planning)").size() +
@@ -235,8 +357,10 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
                                  Database.getPlansByStatus("Rejected (to Reception for Client)").size() +
                                  Database.getPlansByStatus("Client Notified (Awaiting Resubmission)").size();
 
-        cardsPanel.updateCard(0, "Total Pending", pending, new Color(255, 193, 7)); // Yellow
-        cardsPanel.updateCard(1, "Total Approved", approved, new Color(40, 167, 69)); // Green
-        cardsPanel.updateCard(2, "Total Deferred/Rejected", deferredOrRejected, new Color(220, 53, 69)); // Red
+        cardsPanel.updateCard(0, "Total Pending", pending, new Color(255, 193, 7));
+        cardsPanel.updateCard(1, "Total Approved", approved, new Color(40, 167, 69));
+        cardsPanel.updateCard(2, "Total Deferred/Rejected", deferredOrRejected, new Color(220, 53, 69));
+
+        loadDynamicChecklist();
     }
 }

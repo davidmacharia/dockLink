@@ -25,8 +25,9 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
 
     private DashboardTablePanel tablePanel;
 
-    // Plan details panel
+    // Plan details panel components
     private JLabel planIdLabel, applicantNameLabel, plotNoLabel, statusLabel;
+    private JTextArea planRemarksDisplayArea; // NEW: To display existing remarks of the plan (read-only)
     private JTextField referenceNoField, billingAmountField;
     private JButton assignRefNoButton, sendBillingButton, forwardToCommitteeButton, forwardRejectedToReceptionButton, viewDocumentsButton;
 
@@ -110,9 +111,23 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
         statusLabel = new JLabel("N/A");
         panel.add(statusLabel, gbc);
 
+        // Existing Plan Remarks (read-only)
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("Plan Remarks:"), gbc);
+        gbc.gridy++;
+        planRemarksDisplayArea = new JTextArea(3, 20);
+        planRemarksDisplayArea.setEditable(false); // Make it read-only
+        planRemarksDisplayArea.setLineWrap(true);
+        planRemarksDisplayArea.setWrapStyleWord(true);
+        JScrollPane scrollPanePlanRemarks = new JScrollPane(planRemarksDisplayArea);
+        panel.add(scrollPanePlanRemarks, gbc);
+
         // Reference Number
         gbc.gridx = 0;
         gbc.gridy++;
+        gbc.gridwidth = 1;
         panel.add(new JLabel("Reference No:"), gbc);
         gbc.gridx = 1;
         referenceNoField = new JTextField(15);
@@ -226,13 +241,14 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
                 applicantNameLabel.setText(selectedPlan.getApplicantName());
                 plotNoLabel.setText(selectedPlan.getPlotNo());
                 statusLabel.setText(selectedPlan.getStatus());
+                planRemarksDisplayArea.setText(selectedPlan.getRemarks() != null ? selectedPlan.getRemarks() : "No remarks."); // NEW: Display existing remarks
                 referenceNoField.setText(selectedPlan.getReferenceNo() != null ? selectedPlan.getReferenceNo() : "");
                 System.out.println("PlanningReviewPanel: Loaded plan ID " + planId + ", Reference No: " + selectedPlan.getReferenceNo());
 
                 // Enable/disable buttons based on status
                 boolean isUnderReviewPlanning = selectedPlan.getStatus().equals("Under Review (Planning)");
                 boolean isAwaitingPayment = selectedPlan.getStatus().equals("Awaiting Payment");
-                boolean isPaymentReceived = selectedPlan.getStatus().equals("PaymentReceived"); // This status is set after reception processes payment
+                boolean isPaymentReceived = selectedPlan.getStatus().equals("Payment Received"); // This status is set after reception processes payment
                 boolean isRejectedByDirector = selectedPlan.getStatus().equals("Rejected (to Planning)");
                 boolean isDeferredByDirector = selectedPlan.getStatus().equals("Deferred (to Planning)");
                 boolean isRejectedByCommittee = selectedPlan.getStatus().equals("Rejected"); // From Committee
@@ -469,6 +485,7 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
         applicantNameLabel.setText("N/A");
         plotNoLabel.setText("N/A");
         statusLabel.setText("N/A");
+        planRemarksDisplayArea.setText(""); // NEW: Clear existing remarks
         referenceNoField.setText("");
         billingAmountField.setText("");
         assignRefNoButton.setEnabled(false);
@@ -480,27 +497,28 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
 
     @Override
     public void refreshData() {
-        // Define statuses relevant for Planning Department's immediate action
-        List<String> planningActionableStatuses = List.of(
+        // Define statuses for plans that are *in* the Planning Department for review/action
+        List<String> plansInPlanningDepartment = List.of(
             "Under Review (Planning)",
-            "Awaiting Payment",
-            "Payment Received",
-            "Rejected (to Planning)",
-            "Deferred (to Planning)",
-            "Rejected", // From Committee
-            "Deferred", // From Committee
-            "Rejected by Structural (to Planning)"
+            "Payment Received", // Payment processed, back to Planning for review
+            "Rejected (to Planning)", // Returned from Director
+            "Deferred (to Planning)", // Returned from Director
+            "Rejected", // Returned from Committee
+            "Deferred", // Returned from Committee
+            "Rejected by Structural (to Planning)" // Returned from Structural
         );
 
         // Filter all plans to get only those relevant to Planning's immediate actions
         List<Plan> allPlans = Database.getAllPlans();
-        List<Plan> plansForPlanningAction = allPlans.stream()
-                                                .filter(p -> planningActionableStatuses.contains(p.getStatus()))
+        List<Plan> plansForPlanningReviewTable = allPlans.stream()
+                                                .filter(p -> plansInPlanningDepartment.contains(p.getStatus()))
                                                 .collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
 
-        // Update cards based on these actionable statuses
-        int newPlansForReview = Database.getPlansByStatus("Under Review (Planning)").size();
-        int awaitingPayment = Database.getPlansByStatus("Awaiting Payment").size();
+        // Update cards based on relevant Planning statuses
+        int newPlansForReview = Database.getPlansByStatus("Under Review (Planning)").size() +
+                                Database.getPlansByStatus("Payment Received").size(); // New submissions + payment confirmed
+        
+        int plansSentForBilling = Database.getPlansByStatus("Awaiting Payment").size(); // Plans Planning sent to Reception for billing
         
         // Count plans returned from other departments
         int returnedPlans = Database.getPlansByStatus("Rejected (to Planning)").size() +
@@ -510,14 +528,14 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
                             Database.getPlansByStatus("Rejected by Structural (to Planning)").size();
 
         cardsPanel.updateCard(0, "New Plans for Review", newPlansForReview, new Color(255, 193, 7)); // Yellow
-        cardsPanel.updateCard(1, "Awaiting Payment", awaitingPayment, new Color(255, 165, 0)); // Orange
+        cardsPanel.updateCard(1, "Plans Sent for Billing", plansSentForBilling, new Color(255, 165, 0)); // Orange
         cardsPanel.updateCard(2, "Returned Plans", returnedPlans, new Color(220, 53, 69)); // Red
 
         // Update table with only plans requiring Planning's action
-        tablePanel.updateTable(plansForPlanningAction);
+        tablePanel.updateTable(plansForPlanningReviewTable);
 
         // Clear details if no plan is selected or if selected plan is no longer relevant
-        if (selectedPlan != null && !plansForPlanningAction.stream().anyMatch(p -> p.getId() == selectedPlan.getId())) {
+        if (selectedPlan != null && !plansForPlanningReviewTable.stream().anyMatch(p -> p.getId() == selectedPlan.getId())) {
             clearDetails();
         } else if (selectedPlan != null) {
             // Re-load details for the currently selected plan to reflect any status changes

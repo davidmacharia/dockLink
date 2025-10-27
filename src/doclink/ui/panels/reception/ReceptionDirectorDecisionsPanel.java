@@ -1,6 +1,6 @@
 package doclink.ui.panels.reception;
 
-import doclink.Database;
+import doclink.Database; // Added import
 import doclink.models.Document;
 import doclink.models.Log;
 import doclink.models.Plan;
@@ -178,7 +178,7 @@ public class ReceptionDirectorDecisionsPanel extends JPanel implements Dashboard
     private void loadSelectedPlanForDirectorDecisionDetails() {
         int selectedRow = directorDecisionsTablePanel.getPlansTable().getSelectedRow();
         if (selectedRow != -1) {
-            int planId = (int) directorDecisionsTablePanel.getPlansTable().getValueAt(selectedRow, 0);
+            int planId = (int) directorDecisionsTablePanel.getPlansTable().getValueAt(selectedRow, 1); // Corrected index to 1
             selectedPlanForDirectorDecision = Database.getPlanById(planId);
 
             if (selectedPlanForDirectorDecision != null) {

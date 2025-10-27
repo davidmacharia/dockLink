@@ -27,6 +27,7 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
 
     // Plan details panel components
     private JLabel planIdLabel, applicantNameLabel, plotNoLabel, statusLabel;
+    private JTextArea planRemarksDisplayArea; // NEW: To display existing remarks of the plan (read-only)
     private JTextField referenceNoField, billingAmountField;
     private JButton assignRefNoButton, sendBillingButton, forwardToCommitteeButton, forwardRejectedToReceptionButton, viewDocumentsButton;
 
@@ -110,9 +111,23 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
         statusLabel = new JLabel("N/A");
         panel.add(statusLabel, gbc);
 
+        // Existing Plan Remarks (read-only)
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("Plan Remarks:"), gbc);
+        gbc.gridy++;
+        planRemarksDisplayArea = new JTextArea(3, 20);
+        planRemarksDisplayArea.setEditable(false); // Make it read-only
+        planRemarksDisplayArea.setLineWrap(true);
+        planRemarksDisplayArea.setWrapStyleWord(true);
+        JScrollPane scrollPanePlanRemarks = new JScrollPane(planRemarksDisplayArea);
+        panel.add(scrollPanePlanRemarks, gbc);
+
         // Reference Number
         gbc.gridx = 0;
         gbc.gridy++;
+        gbc.gridwidth = 1;
         panel.add(new JLabel("Reference No:"), gbc);
         gbc.gridx = 1;
         referenceNoField = new JTextField(15);
@@ -225,6 +240,7 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
                 applicantNameLabel.setText(selectedPlan.getApplicantName());
                 plotNoLabel.setText(selectedPlan.getPlotNo());
                 statusLabel.setText(selectedPlan.getStatus());
+                planRemarksDisplayArea.setText(selectedPlan.getRemarks() != null ? selectedPlan.getRemarks() : "No remarks."); // NEW: Display existing remarks
                 referenceNoField.setText(selectedPlan.getReferenceNo() != null ? selectedPlan.getReferenceNo() : "");
 
                 // Enable/disable buttons based on status
@@ -468,6 +484,7 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
         applicantNameLabel.setText("N/A");
         plotNoLabel.setText("N/A");
         statusLabel.setText("N/A");
+        planRemarksDisplayArea.setText(""); // NEW: Clear existing remarks
         referenceNoField.setText("");
         billingAmountField.setText("");
         assignRefNoButton.setEnabled(false);
