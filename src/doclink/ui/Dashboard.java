@@ -19,6 +19,7 @@ import doclink.ui.panels.reception.ReceptionAllPlansPanel;
 import doclink.ui.panels.reception.ReceptionSubmissionPanel;
 import doclink.ui.panels.structural.StructuralReviewPanel;
 import doclink.ui.panels.SettingsPanel;
+import doclink.ui.panels.developer.DeveloperPanel; // NEW: Import DeveloperPanel
 
 import javax.swing.*;
 import java.awt.*;
@@ -50,6 +51,13 @@ public class Dashboard extends JFrame {
 
     public Dashboard(User user) {
         this.currentUser = user;
+        if (this.currentUser == null) {
+            System.err.println("Dashboard: currentUser is null. This should not happen.");
+            JOptionPane.showMessageDialog(null, "User data missing. Please log in again.", "Error", JOptionPane.ERROR_MESSAGE);
+            System.exit(1);
+            return;
+        }
+        System.out.println("Dashboard: Current user role is: '" + this.currentUser.getRole() + "'"); // Debug print
         setTitle("DocLink - " + user.getRole() + " Dashboard");
         setExtendedState(JFrame.MAXIMIZED_BOTH);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -118,7 +126,9 @@ public class Dashboard extends JFrame {
         appLogo.setBorder(BorderFactory.createEmptyBorder(0, 0, 30, 0));
         sidebar.add(appLogo);
 
-        switch (currentUser.getRole()) {
+        String processedRole = currentUser.getRole() != null ? currentUser.getRole().trim() : "";
+        System.out.println("createSidebar: Building sidebar for role: '" + processedRole + "'"); // Debug print
+        switch (processedRole) {
             case "Reception":
                 addSidebarButton(sidebar, "New Plan Submission", "ReceptionSubmissionPanel");
                 addSidebarButton(sidebar, "All Plans", "ReceptionAllPlansPanel");
@@ -150,6 +160,13 @@ public class Dashboard extends JFrame {
                 addSidebarButton(sidebar, "Dashboard", "AdminDashboardPanel");
                 addSidebarButton(sidebar, "User Management", "AdminUserManagementPanel");
                 addSidebarButton(sidebar, "Rejected Plans", "AdminRejectedPlansPanel");
+                break;
+            case "Developer": // NEW: Developer Role
+                System.out.println("createSidebar: Adding Developer Tools button for role: '" + processedRole + "'"); // Debug print
+                addSidebarButton(sidebar, "Developer Tools", "DeveloperPanel");
+                break;
+            default:
+                System.out.println("createSidebar: No specific sidebar buttons for unmatched role: '" + processedRole + "'"); // Debug print
                 break;
         }
 
@@ -278,6 +295,11 @@ public class Dashboard extends JFrame {
         functionalPanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
         refreshablePanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
 
+        // Developer Panel (NEW)
+        DeveloperPanel developerPanel = new DeveloperPanel(currentUser, this, cardsPanel);
+        functionalPanels.put("DeveloperPanel", developerPanel);
+        refreshablePanels.put("DeveloperPanel", developerPanel);
+
         // Common Panels
         SettingsPanel settingsPanel = new SettingsPanel(currentUser, this, cardsPanel);
         functionalPanels.put("SettingsPanel", settingsPanel);
@@ -295,8 +317,10 @@ public class Dashboard extends JFrame {
     }
 
     private void showDefaultRolePanel(String role) {
+        String processedRole = role != null ? role.trim() : ""; // Handle null role
+        System.out.println("showDefaultRolePanel: Processing role: '" + processedRole + "'"); // Debug print
         String defaultPanelName = "";
-        switch (role) {
+        switch (processedRole) {
             case "Reception":
                 defaultPanelName = "ReceptionAllPlansPanel";
                 break;
@@ -318,7 +342,12 @@ public class Dashboard extends JFrame {
             case "Admin":
                 defaultPanelName = "AdminDashboardPanel";
                 break;
+            case "Developer": // NEW: Default for Developer
+                System.out.println("showDefaultRolePanel: Default panel for Developer is DeveloperPanel."); // Debug print
+                defaultPanelName = "DeveloperPanel";
+                break;
             default:
+                System.out.println("showDefaultRolePanel: Defaulting to SettingsPanel for unknown/unmatched role: '" + processedRole + "'"); // Debug print
                 defaultPanelName = "SettingsPanel";
                 break;
         }

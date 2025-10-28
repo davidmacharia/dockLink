@@ -2,6 +2,7 @@ package doclink.ui.panels;
 
 import doclink.Database;
 import doclink.models.User;
+import doclink.models.UserPreference; // NEW: Import UserPreference
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel; // Needed for Dashboard.Refreshable interface, even if not directly using cards
 
@@ -17,12 +18,18 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
 
     private JTextField nameField;
     private JTextField emailField;
+    private JTextField contactField; // NEW: Added contact field
     private JLabel roleLabel;
     private JPasswordField currentPasswordField; // New field for current password
     private JPasswordField newPasswordField;
     private JPasswordField confirmPasswordField;
     private JButton updateProfileButton;
     private JButton changePasswordButton;
+
+    // NEW: Notification Preferences
+    private JCheckBox emailNotificationsCheckBox;
+    private JCheckBox smsNotificationsCheckBox;
+    private JButton saveNotificationPreferencesButton;
 
     private static final Color DARK_NAVY = new Color(26, 35, 126);
 
@@ -89,6 +96,14 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         rowProfile++;
         gbcProfile.gridx = 0;
         gbcProfile.gridy = rowProfile;
+        profilePanel.add(new JLabel("Contact:"), gbcProfile); // Corrected: panel.add -> profilePanel.add
+        gbcProfile.gridx = 1;
+        contactField = new JTextField(20); // NEW: Add Contact Field
+        profilePanel.add(contactField, gbcProfile);
+
+        rowProfile++;
+        gbcProfile.gridx = 0;
+        gbcProfile.gridy = rowProfile;
         profilePanel.add(new JLabel("Role:"), gbcProfile);
         gbcProfile.gridx = 1;
         roleLabel = new JLabel(); // Role is read-only
@@ -102,12 +117,6 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         updateProfileButton = createStyledButton("Update Profile Details", new Color(0, 123, 255));
         updateProfileButton.addActionListener(e -> updateProfileDetails());
         profilePanel.add(updateProfileButton, gbcProfile);
-
-        // Add vertical glue to push content to top
-        gbcProfile.gridx = 0;
-        gbcProfile.gridy = rowProfile + 1;
-        gbcProfile.weighty = 1.0;
-        profilePanel.add(Box.createVerticalGlue(), gbcProfile);
 
         // --- Change Password Panel ---
         JPanel passwordPanel = new JPanel(new GridBagLayout());
@@ -177,6 +186,57 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         mainGbc.gridy = 0;
         mainContentContainer.add(passwordPanel, mainGbc);
 
+        // --- NEW: Notification Preferences Panel (below profile panel) ---
+        JPanel notificationPanel = new JPanel(new GridBagLayout());
+        notificationPanel.setBackground(Color.WHITE);
+        notificationPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        GridBagConstraints gbcNotif = new GridBagConstraints();
+        gbcNotif.insets = new Insets(8, 8, 8, 8);
+        gbcNotif.fill = GridBagConstraints.HORIZONTAL;
+        gbcNotif.anchor = GridBagConstraints.WEST;
+
+        JLabel notifTitle = new JLabel("Notification Preferences");
+        notifTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        notifTitle.setForeground(DARK_NAVY);
+        gbcNotif.gridx = 0;
+        gbcNotif.gridy = 0;
+        gbcNotif.gridwidth = 2;
+        notificationPanel.add(notifTitle, gbcNotif);
+
+        int rowNotif = 1;
+        gbcNotif.gridwidth = 2; // Checkboxes span 2 columns
+
+        gbcNotif.gridx = 0;
+        gbcNotif.gridy = rowNotif++;
+        emailNotificationsCheckBox = new JCheckBox("Receive Email Notifications");
+        emailNotificationsCheckBox.setBackground(Color.WHITE);
+        notificationPanel.add(emailNotificationsCheckBox, gbcNotif);
+
+        gbcNotif.gridx = 0;
+        gbcNotif.gridy = rowNotif++;
+        smsNotificationsCheckBox = new JCheckBox("Receive SMS Notifications");
+        smsNotificationsCheckBox.setBackground(Color.WHITE);
+        notificationPanel.add(smsNotificationsCheckBox, gbcNotif);
+
+        gbcNotif.gridx = 0;
+        gbcNotif.gridy = rowNotif++;
+        saveNotificationPreferencesButton = createStyledButton("Save Preferences", new Color(40, 167, 69)); // Green
+        saveNotificationPreferencesButton.addActionListener(e -> saveNotificationPreferences());
+        notificationPanel.add(saveNotificationPreferencesButton, gbcNotif);
+
+        // Add vertical glue to push content to top
+        gbcNotif.gridx = 0;
+        gbcNotif.gridy = rowNotif++;
+        gbcNotif.weighty = 1.0;
+        notificationPanel.add(Box.createVerticalGlue(), gbcNotif);
+
+        // Add the notification panel below the profile panel
+        mainGbc.gridx = 0;
+        mainGbc.gridy = 1; // Second row
+        mainGbc.gridwidth = 1; // Only one column wide
+        mainContentContainer.add(notificationPanel, mainGbc);
+
         // Add the main content container to this SettingsPanel, centered
         GridBagConstraints panelGbc = new GridBagConstraints();
         panelGbc.fill = GridBagConstraints.BOTH;
@@ -216,36 +276,67 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         }
         nameField.setText(currentUser.getName());
         emailField.setText(currentUser.getEmail());
+        contactField.setText(currentUser.getContact()); // NEW: Populate contact field
         roleLabel.setText(currentUser.getRole());
         currentPasswordField.setText(""); // Clear current password field
         newPasswordField.setText("");
         confirmPasswordField.setText("");
+
+        // Load notification preferences
+        UserPreference preferences = Database.getUserPreferences(currentUser.getId());
+        if (preferences != null) {
+            emailNotificationsCheckBox.setSelected(preferences.isEmailNotificationsEnabled());
+            smsNotificationsCheckBox.setSelected(preferences.isSmsNotificationsEnabled());
+        } else {
+            // Default to enabled if no preferences found
+            emailNotificationsCheckBox.setSelected(true);
+            smsNotificationsCheckBox.setSelected(true);
+        }
     }
 
     private void updateProfileDetails() {
         String newName = nameField.getText().trim();
         String newEmail = emailField.getText().trim();
+        String newContact = contactField.getText().trim(); // NEW: Get new contact
 
         if (newName.isEmpty() || newEmail.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Name and Email cannot be empty.", "Input Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        if (newName.equals(currentUser.getName()) && newEmail.equals(currentUser.getEmail())) {
+        boolean nameEmailChanged = !newName.equals(currentUser.getName()) || !newEmail.equals(currentUser.getEmail());
+        boolean contactChanged = !newContact.equals(currentUser.getContact());
+
+        if (!nameEmailChanged && !contactChanged) {
             JOptionPane.showMessageDialog(this, "No changes detected in profile details.", "Information", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
-        if (Database.updateUserNameAndEmail(currentUser.getId(), newName, newEmail)) {
-            currentUser.setName(newName);
-            currentUser.setEmail(newEmail);
+        boolean success = true;
+        if (nameEmailChanged) {
+            if (Database.updateUserNameAndEmail(currentUser.getId(), newName, newEmail)) {
+                currentUser.setName(newName);
+                currentUser.setEmail(newEmail);
+            } else {
+                success = false;
+            }
+        }
+        if (success && contactChanged) { // Only try to update contact if name/email update was successful or not attempted
+            if (Database.updateUserContact(currentUser.getId(), newContact)) {
+                currentUser.setContact(newContact);
+            } else {
+                success = false;
+            }
+        }
+
+        if (success) {
             JOptionPane.showMessageDialog(this, "Profile details updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             // Refresh the dashboard header if it displays user name/email
             parentDashboard.revalidate();
             parentDashboard.repaint();
             loadUserDetails(); // Reload to ensure UI reflects changes
         } else {
-            JOptionPane.showMessageDialog(this, "Failed to update profile details. The email might already be in use.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Failed to update profile details. The email might already be in use or another error occurred.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -286,6 +377,18 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
             confirmPasswordField.setText("");
         } else {
             JOptionPane.showMessageDialog(this, "Failed to update password.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void saveNotificationPreferences() {
+        boolean emailEnabled = emailNotificationsCheckBox.isSelected();
+        boolean smsEnabled = smsNotificationsCheckBox.isSelected();
+
+        UserPreference preferences = new UserPreference(currentUser.getId(), emailEnabled, smsEnabled);
+        if (Database.saveUserPreferences(preferences)) {
+            JOptionPane.showMessageDialog(this, "Notification preferences saved successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "Failed to save notification preferences.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

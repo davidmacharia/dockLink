@@ -83,15 +83,16 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
         gbc.gridwidth = 2;
         panel.add(title, gbc);
 
-        gbc.gridy++;
-        gbc.gridwidth = 1;
-        panel.add(new JLabel("Plan ID:"), gbc);
-        gbc.gridx = 1;
-        planIdLabel = new JLabel("N/A");
-        panel.add(planIdLabel, gbc);
+        // Removed Plan ID display
+        // gbc.gridy++;
+        // gbc.gridwidth = 1;
+        // panel.add(new JLabel("Plan ID:"), gbc);
+        // gbc.gridx = 1;
+        planIdLabel = new JLabel("N/A"); // Keep the label instance, but don't add to panel
+        // panel.add(planIdLabel, gbc);
 
         gbc.gridx = 0;
-        gbc.gridy++;
+        gbc.gridy++; // Adjusted gridy
         panel.add(new JLabel("Applicant:"), gbc);
         gbc.gridx = 1;
         applicantNameLabel = new JLabel("N/A");
@@ -237,7 +238,7 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
             selectedPlan = Database.getPlanById(planId);
 
             if (selectedPlan != null) {
-                planIdLabel.setText(String.valueOf(selectedPlan.getId()));
+                // planIdLabel.setText(String.valueOf(selectedPlan.getId())); // No longer setting text for hidden label
                 applicantNameLabel.setText(selectedPlan.getApplicantName());
                 plotNoLabel.setText(selectedPlan.getPlotNo());
                 statusLabel.setText(selectedPlan.getStatus());
@@ -481,7 +482,7 @@ public class PlanningReviewPanel extends JPanel implements Dashboard.Refreshable
 
     private void clearDetails() {
         selectedPlan = null;
-        planIdLabel.setText("N/A");
+        // planIdLabel.setText("N/A"); // No longer setting text for hidden label
         applicantNameLabel.setText("N/A");
         plotNoLabel.setText("N/A");
         statusLabel.setText("N/A");

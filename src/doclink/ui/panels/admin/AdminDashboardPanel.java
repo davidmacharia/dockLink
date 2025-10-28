@@ -283,7 +283,7 @@ public class AdminDashboardPanel extends JPanel implements Dashboard.Refreshable
             Plan plan = Database.getPlanById(clickedPlanId);
             if (plan != null) {
                 StringBuilder detailsBuilder = new StringBuilder();
-                detailsBuilder.append(String.format("Plan ID: %d\n", plan.getId()));
+                // Removed: detailsBuilder.append(String.format("Plan ID: %d\n", plan.getId()));
                 detailsBuilder.append(String.format("Reference No: %s\n", plan.getReferenceNo() != null ? plan.getReferenceNo() : "N/A"));
                 detailsBuilder.append(String.format("Applicant: %s\n", plan.getApplicantName()));
                 detailsBuilder.append(String.format("Plot No: %s\n", plan.getPlotNo()));
