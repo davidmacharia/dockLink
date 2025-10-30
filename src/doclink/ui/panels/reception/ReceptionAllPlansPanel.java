@@ -9,6 +9,7 @@ import doclink.models.User;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
+import doclink.ui.components.DocumentViewerDialog; // NEW: Import DocumentViewerDialog
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -470,28 +471,8 @@ public class ReceptionAllPlansPanel extends JPanel implements Dashboard.Refresha
             JOptionPane.showMessageDialog(this, "No plan selected.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
-        List<Document> documents = Database.getDocumentsByPlanId(plan.getId());
-        if (documents.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No documents found for this plan.", "Documents", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
-        StringBuilder docList = new StringBuilder("Documents for Plan ID: " + plan.getId() + "\n\n");
-        for (Document doc : documents) {
-            docList.append("Name: ").append(doc.getDocName())
-                   .append(" (Type: ").append(doc.getDocumentType()).append(")\n")
-                   .append("Path: ").append(doc.getFilePath() != null ? doc.getFilePath() : "N/A").append("\n\n");
-        }
-
-        JTextArea textArea = new JTextArea(docList.toString());
-        textArea.setEditable(false);
-        textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
-        JScrollPane scrollPane = new JScrollPane(textArea);
-        scrollPane.setPreferredSize(new Dimension(500, 300));
-
-        JOptionPane.showMessageDialog(this, scrollPane, "Plan Documents", JOptionPane.PLAIN_MESSAGE);
+        DocumentViewerDialog viewer = new DocumentViewerDialog(parentDashboard, plan);
+        viewer.setVisible(true);
     }
 
     private void clearDetails() {

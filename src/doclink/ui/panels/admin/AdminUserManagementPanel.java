@@ -32,7 +32,7 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
 
     private JTextField searchField; // New search field
     private JButton searchButton; // New search button
-    private List<User> allUsersData; // To store the original, unfiltered list of users
+    private List<User> allUsersData; // To store the original, unfiltered list of users (excluding developers)
 
     private User selectedUser;
     private static final Color DARK_NAVY = new Color(26, 35, 126);
@@ -383,8 +383,6 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
             // This condition handles if the admin explicitly wants to set the password to "doclink"
             // We need to fetch the current password to avoid unnecessary updates if it's already "doclink"
             // For simplicity, we'll assume if the field is "doclink", and it's not the current password, we update.
-            // A more robust solution would involve fetching the current password hash.
-            // For now, if the field is "doclink" and the user's current password isn't "doclink", we update.
             // This requires fetching the current password, which is not directly available in `selectedUser` object.
             // Given the current `Database.authenticateUser` method, we don't store plain text passwords in `User` model.
             // To keep it simple and avoid fetching password from DB for comparison, we'll update if the field is "doclink".
@@ -502,17 +500,17 @@ public class AdminUserManagementPanel extends JPanel implements Dashboard.Refres
 
     @Override
     public void refreshData() {
-        allUsersData = Database.getAllUsers(); // Load all users from the database
+        allUsersData = Database.getAllNonDeveloperUsers(); // Load all users from the database, excluding developers
         applyFilter(); // Apply the current filter (or show all if no filter)
         clearForm(); // Reset form after refresh
         
-        // Update cards with relevant counts for Admin
-        int totalUsers = allUsersData.size();
+        // Update cards with relevant counts for Admin (excluding developers)
+        int totalUsers = allUsersData.size(); // This now excludes developers
         long activeUsers = allUsersData.stream().filter(u -> !u.getRole().equals("Blocked")).count(); 
         long adminUsers = allUsersData.stream().filter(u -> u.getRole().equals("Admin")).count();
 
-        cardsPanel.updateCard(0, "Total Users", totalUsers, new Color(0, 123, 255)); 
-        cardsPanel.updateCard(1, "Active Users", (int) activeUsers, new Color(40, 167, 69)); 
+        cardsPanel.updateCard(0, "Total Users ", totalUsers, new Color(0, 123, 255)); 
+        cardsPanel.updateCard(1, "Active Users ", (int) activeUsers, new Color(40, 167, 69)); 
         cardsPanel.updateCard(2, "Admin Accounts", (int) adminUsers, new Color(255, 193, 7)); 
     }
 }

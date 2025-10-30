@@ -1,12 +1,15 @@
 package doclink.ui;
 
 import doclink.Database;
+import doclink.models.SystemUpdate;
 import doclink.models.User;
+import doclink.models.UserPreference;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.time.format.DateTimeFormatter;
 
 public class LoginFrame extends JFrame {
     private JTextField emailField;
@@ -151,6 +154,39 @@ public class LoginFrame extends JFrame {
             dispose(); // Close login window
             Dashboard dashboard = new Dashboard(user);
             dashboard.setVisible(true);
+
+            // NEW: Check for system updates after successful login, but skip for Developer role
+            if (!user.getRole().equals("Developer")) { // Skip update prompt for Developer
+                SystemUpdate latestUpdate = Database.getLatestSystemUpdate();
+                UserPreference userPreference = Database.getUserPreferences(user.getId());
+
+                // If no preferences exist, create a default one
+                if (userPreference == null) {
+                    userPreference = new UserPreference(user.getId(), true, true, 0); // Default to enabled, lastSeenUpdateId = 0
+                    Database.saveUserPreferences(userPreference);
+                }
+
+                if (latestUpdate != null && userPreference.getLastSeenUpdateId() < latestUpdate.getId()) {
+                    String updateMessage = String.format(
+                        "<html><b>DocLink System Update!</b><br><br>" +
+                        "<b>Version:</b> %s<br>" +
+                        "<b>Title:</b> %s<br>" +
+                        "<b>Message:</b> %s<br><br>" +
+                        "<i>Released: %s</i></html>",
+                        latestUpdate.getVersion() != null ? latestUpdate.getVersion() : "N/A",
+                        latestUpdate.getTitle(),
+                        latestUpdate.getMessage(),
+                        latestUpdate.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                    );
+
+                    JOptionPane.showMessageDialog(dashboard, updateMessage, "System Update Notification", JOptionPane.INFORMATION_MESSAGE);
+
+                    // Update user's last seen update ID
+                    userPreference.setLastSeenUpdateId(latestUpdate.getId());
+                    Database.saveUserPreferences(userPreference);
+                }
+            }
+
         } else {
             JOptionPane.showMessageDialog(this, "Invalid email or password.", "Login Failed", JOptionPane.ERROR_MESSAGE);
         }

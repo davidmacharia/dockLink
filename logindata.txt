@@ -7,3 +7,8 @@ Client User: client@doclink.com
 You can use any of these email addresses with the password password to log in.
 
 
+ javac -d bin -cp "lib/*" src/doclink/*.java src/doclink/communication/*.java src/doclink/models/*.java src/doclink/sync/*.java src/doclink/ui/*.java src/doclink/ui/components/*.java src/doclink/ui/panels/*.java src/doclink/ui/panels/admin/*.java src/doclink/ui/panels/client/*.java src/doclink/ui/panels/committee/*.java src/doclink/ui/panels/developer/*.java src/doclink/ui/panels/director/*.java src/doclink/ui/panels/planning/*.java src/doclink/ui/panels/reception/*.java src/doclink/ui/panels/structural/*.java
+
+ jar cfm doclink-app.jar manifest.txt -C bin .
+
+ java -cp "lib/*;doclink-app.jar" doclink.Main

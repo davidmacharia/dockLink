@@ -21,6 +21,7 @@ public class AppConfig {
     public static final String HYBRID_SYNC_MODE_KEY = "doclink.sync.hybrid.mode"; // "P2P_ONLY", "CENTRAL_API_ONLY", "HYBRID"
     public static final String CENTRAL_API_URL_KEY = "doclink.central.api.url";
     public static final String CENTRAL_API_AUTH_TOKEN_KEY = "doclink.central.api.auth.token";
+    public static final String LAST_CENTRAL_PULL_TIMESTAMP_KEY = "doclink.sync.last.central.pull.timestamp"; // NEW: Key for last central pull timestamp
 
     // NEW: Communication Manager Keys
     public static final String SMTP_HOST_KEY = "doclink.comm.smtp.host";

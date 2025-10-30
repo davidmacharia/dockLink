@@ -216,13 +216,13 @@ public class AdminDashboardPanel extends JPanel implements Dashboard.Refreshable
 
     @Override
     public void refreshData() {
-        List<User> allUsers = Database.getAllUsers();
-        int totalUsers = allUsers.size();
-        long activeUsers = allUsers.stream().filter(u -> !u.getRole().equals("Blocked")).count();
-        long adminUsers = allUsers.stream().filter(u -> u.getRole().equals("Admin")).count();
+        List<User> allNonDeveloperUsers = Database.getAllNonDeveloperUsers(); // Get all users excluding developers
+        int totalUsers = allNonDeveloperUsers.size();
+        long activeUsers = allNonDeveloperUsers.stream().filter(u -> !u.getRole().equals("Blocked")).count();
+        long adminUsers = allNonDeveloperUsers.stream().filter(u -> u.getRole().equals("Admin")).count();
 
-        cardsPanel.updateCard(0, "Total Users", totalUsers, new Color(0, 123, 255));
-        cardsPanel.updateCard(1, "Active Users", (int) activeUsers, new Color(40, 167, 69));
+        cardsPanel.updateCard(0, "Total Users ", totalUsers, new Color(0, 123, 255));
+        cardsPanel.updateCard(1, "Active Users ", (int) activeUsers, new Color(40, 167, 69));
         cardsPanel.updateCard(2, "Admin Accounts", (int) adminUsers, new Color(255, 193, 7));
 
         loadAllPlansAndSummarizeActivities();

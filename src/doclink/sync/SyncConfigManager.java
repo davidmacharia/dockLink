@@ -3,10 +3,15 @@ package doclink.sync;
 import doclink.AppConfig;
 import doclink.Database;
 import doclink.models.Peer;
+import doclink.models.ChangelogEntry; // NEW: Import ChangelogEntry
+import doclink.models.Plan; // NEW: Import Plan
+import doclink.models.User; // NEW: Import User
 
 import javax.swing.*;
 import java.io.IOException;
 import java.net.*;
+import java.sql.Connection; // NEW: Import Connection
+import java.sql.SQLException; // NEW: Import SQLException
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -118,15 +123,22 @@ public class SyncConfigManager {
                 log("Error closing server socket: " + e.getMessage());
             }
             log("Server thread interrupted.");
+            serverThread = null; // Nullify the thread reference
         }
         if (udpDiscoveryThread != null && udpDiscoveryThread.isAlive()) {
             udpDiscoveryThread.interrupt();
             try {
-                if (udpSocket != null) udpSocket.close(); // Close the discovery UDP socket
+                if (udpSocket != null) {
+                    udpSocket.close(); // Close the discovery UDP socket
+                    udpSocket = null; // Explicitly nullify the socket
+                }
+                // Give a small moment for the OS to release the port
+                Thread.sleep(100); 
             } catch (Exception e) {
                 log("Error closing UDP socket: " + e.getMessage());
             }
             log("UDP discovery listener thread interrupted.");
+            udpDiscoveryThread = null; // Nullify the thread reference
         }
         log("All sync services stopped.");
     }
@@ -373,6 +385,12 @@ public class SyncConfigManager {
         if (currentHybridSyncMode == HybridSyncMode.CENTRAL_API_ONLY || currentHybridSyncMode == HybridSyncMode.HYBRID) {
             performCentralApiSync();
         }
+        // NEW: Also trigger local-to-central DB sync if applicable
+        if (Database.getCurrentDatabaseType() == Database.DatabaseType.SQLITE && 
+            (currentHybridSyncMode == HybridSyncMode.HYBRID || currentHybridSyncMode == HybridSyncMode.P2P_ONLY)) { // P2P_ONLY implies local DB is primary
+            performLocalToCentralDbSync();
+            performCentralToLocalDbSync(); // NEW: Also pull from central on force sync
+        }
     }
 
     // --- Backend Sync Engine Placeholders ---
@@ -421,7 +439,15 @@ public class SyncConfigManager {
             return;
         }
         int interval = getSyncIntervalMinutes();
-        scheduler.scheduleAtFixedRate(this::performP2PSync, 0, interval, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> {
+            performP2PSync();
+            // NEW: Also trigger local-to-central DB sync if applicable
+            if (Database.getCurrentDatabaseType() == Database.DatabaseType.SQLITE && 
+                (currentHybridSyncMode == HybridSyncMode.HYBRID || currentHybridSyncMode == HybridSyncMode.P2P_ONLY)) {
+                performLocalToCentralDbSync();
+                performCentralToLocalDbSync(); // NEW: Also pull from central on scheduled sync
+            }
+        }, 0, interval, TimeUnit.MINUTES);
         log("Scheduled P2P sync to run every " + interval + " minutes.");
     }
 
@@ -523,5 +549,89 @@ public class SyncConfigManager {
     private String getLocalChangesAsJson() {
         // This would serialize your local change log into a JSON string
         return "[]";
+    }
+
+    // --- NEW: Local-to-Central Database Synchronization Logic (Push) ---
+    public void performLocalToCentralDbSync() {
+        String centralDbUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY);
+        if (centralDbUrl == null || centralDbUrl.trim().isEmpty()) {
+            log("Central DB URL is not configured. Skipping local-to-central DB push sync.");
+            return;
+        }
+
+        log("Initiating local SQLite to Central DB synchronization (Push)...");
+        List<ChangelogEntry> unsyncedEntries = Database.getUnsyncedChangelogEntries();
+
+        if (unsyncedEntries.isEmpty()) {
+            log("No unsynced changes found in local changelog for push.");
+            return;
+        }
+
+        try (Connection centralConn = Database.getCentralConnection()) {
+            centralConn.setAutoCommit(false); // Start transaction for central DB
+            int syncedCount = 0;
+            for (ChangelogEntry entry : unsyncedEntries) {
+                try {
+                    boolean success = Database.applyChangelogEntryToCentralDb(entry, centralConn);
+                    if (success) {
+                        Database.markChangelogEntryAsSynced(entry.getId());
+                        syncedCount++;
+                    } else {
+                        log("Failed to apply changelog entry " + entry.getId() + " to central DB. Will retry later.");
+                        // Don't mark as synced, so it will be retried.
+                    }
+                } catch (SQLException e) {
+                    log("SQL Error applying changelog entry " + entry.getId() + " to central DB: " + e.getMessage());
+                    // Depending on conflict strategy, might try to resolve or just log and skip/retry
+                    // For now, we just log and don't mark as synced.
+                }
+            }
+            centralConn.commit(); // Commit all successful changes to central DB
+            log("Local-to-Central DB push sync completed. Pushed " + syncedCount + " of " + unsyncedEntries.size() + " entries.");
+        } catch (SQLException e) {
+            log("Error connecting to or performing push operations on Central DB: " + e.getMessage());
+            // Rollback if connection failed or commit failed
+            try {
+                Connection centralConn = Database.getCentralConnection();
+                if (centralConn != null && !centralConn.getAutoCommit()) {
+                    centralConn.rollback();
+                    log("Central DB transaction rolled back due to push error.");
+                }
+            } catch (SQLException ex) {
+                log("Error during central DB rollback after push: " + ex.getMessage());
+            }
+        }
+    }
+
+    // --- NEW: Central-to-Local DB Synchronization Logic (Pull) ---
+    public void performCentralToLocalDbSync() {
+        String centralDbUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY);
+        if (centralDbUrl == null || centralDbUrl.trim().isEmpty()) {
+            log("Central DB URL is not configured. Skipping central-to-local DB pull sync.");
+            return;
+        }
+
+        log("Initiating Central DB to local SQLite synchronization (Pull)...");
+
+        try (Connection centralConn = Database.getCentralConnection()) {
+            // 1. Fetch all users from central DB
+            List<User> centralUsers = Database.getAllUsersFromCentralDb(centralConn);
+            Database.upsertUsersIntoLocalDb(centralUsers);
+            log("Pulled and upserted " + centralUsers.size() + " users from central DB to local SQLite.");
+
+            // 2. Fetch all plans from central DB
+            List<Plan> centralPlans = Database.getAllPlansFromCentralDb(centralConn);
+            Database.upsertPlansIntoLocalDb(centralPlans);
+            log("Pulled and upserted " + centralPlans.size() + " plans from central DB to local SQLite.");
+
+            // TODO: Extend this for other tables (documents, billing, logs, meetings, etc.)
+
+            // Update last central pull timestamp
+            AppConfig.setProperty(AppConfig.LAST_CENTRAL_PULL_TIMESTAMP_KEY, LocalDateTime.now().toString());
+            log("Central-to-Local DB pull sync completed successfully.");
+
+        } catch (SQLException e) {
+            log("Error connecting to or performing pull operations from Central DB: " + e.getMessage());
+        }
     }
 }

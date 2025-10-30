@@ -9,6 +9,7 @@ import doclink.models.User;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
+import doclink.ui.components.DocumentViewerDialog; // NEW: Import DocumentViewerDialog
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -178,7 +179,7 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
         gbc.gridy++;
         gbc.gridwidth = 2;
         viewDocumentsButton = createStyledButton("View Documents", new Color(108, 117, 125)); // Grey
-        viewDocumentsButton.addActionListener(e -> viewPlanDocuments());
+        viewDocumentsButton.addActionListener(e -> viewPlanDocuments(selectedPlan));
         viewDocumentsButton.setEnabled(false); // Initially disabled
         panel.add(viewDocumentsButton, gbc);
 
@@ -363,7 +364,7 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
             }
             // For simplicity, we'll just add a new billing entry or update the existing one.
             // In a real system, you might have a more robust billing history.
-            // For now, let's assume we're creating a new one if it's a re-submission.
+            // For now, let's assume if it's a returned plan, we can create a new billing or update.
             // Or, if the existing one is unpaid, we can update its amount.
             // For this scenario, let's assume if it's a returned plan, we can create a new billing or update.
             // For simplicity, I'll just add a new one if the status is not 'Awaiting Payment'
@@ -449,33 +450,13 @@ public class PlanningFilesPanel extends JPanel implements Dashboard.Refreshable 
         loadSelectedPlanDetails(); // Reload to update UI
     }
 
-    private void viewPlanDocuments() {
-        if (selectedPlan == null) {
-            JOptionPane.showMessageDialog(this, "Please select a plan first.", "Error", JOptionPane.ERROR_MESSAGE);
+    private void viewPlanDocuments(Plan plan) {
+        if (plan == null) {
+            JOptionPane.showMessageDialog(this, "No plan selected.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
-        List<Document> documents = Database.getDocumentsByPlanId(selectedPlan.getId());
-        if (documents.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No documents found for this plan.", "Documents", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
-        StringBuilder docList = new StringBuilder("Documents for Plan ID: " + selectedPlan.getId() + "\n\n");
-        for (Document doc : documents) {
-            docList.append("Name: ").append(doc.getDocName())
-                   .append(" (Type: ").append(doc.getDocumentType()).append(")\n")
-                   .append("Path: ").append(doc.getFilePath() != null ? doc.getFilePath() : "N/A").append("\n\n");
-        }
-
-        JTextArea textArea = new JTextArea(docList.toString());
-        textArea.setEditable(false);
-        textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
-        JScrollPane scrollPane = new JScrollPane(textArea);
-        scrollPane.setPreferredSize(new Dimension(500, 300));
-
-        JOptionPane.showMessageDialog(this, scrollPane, "Plan Documents", JOptionPane.PLAIN_MESSAGE);
+        DocumentViewerDialog viewer = new DocumentViewerDialog(parentDashboard, plan);
+        viewer.setVisible(true);
     }
 
     private void clearDetails() {

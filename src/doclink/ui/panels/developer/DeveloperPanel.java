@@ -16,6 +16,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
@@ -62,24 +64,31 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     private JCheckBox autoSyncEnabledCheckBox;
     private JCheckBox compressionEnabledCheckBox;
     private JCheckBox encryptionEnabledCheckBox;
-    private JButton saveSyncSettingsButton;
-
-    private JTextField centralApiUrlField;
+    
+    // NEW: Separate field for Central API URL
+    private JTextField centralApiUrlInputField; 
     private JTextField centralApiAuthTokenField;
     private JButton testCentralApiConnectionButton;
+    private JButton saveSyncSettingsButton;
 
     private JTextArea liveSyncMonitorArea;
     private JButton forceSyncNowButton;
+    private JButton forceLocalToCentralDbSyncButton; // NEW: Button for local-to-central DB sync
 
+    // System Update Broadcast components
     private JTextField updateVersionField, updateTitleField;
     private JTextArea updateMessageArea;
-    private JComboBox<String> updateTargetRoleComboBox;
-    private JButton sendUpdateButton;
+    private JComboBox<String> updateTargetRoleComboBox; 
+    private JButton addNewBroadcastButton; 
+    private JButton updateBroadcastButton; 
+    private JButton deleteBroadcastButton; 
+    private JButton clearBroadcastFormButton; 
     private JTable systemUpdateLogTable;
     private DefaultTableModel systemUpdateLogTableModel;
+    private SystemUpdate selectedSystemUpdate; 
 
     private JTextField smtpHostField, smtpPortField, smtpUsernameField, senderEmailField;
-    private JPasswordField smtpPasswordField; // Corrected type to JPasswordField
+    private JPasswordField smtpPasswordField; 
     private JTextField smsApiKeyField, smsSenderIdField;
     private JCheckBox autoNotificationsEnabledCheckBox;
     private JButton saveCommSettingsButton;
@@ -89,19 +98,22 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     private JTextField templateSubjectField;
     private JComboBox<String> templateTypeComboBox;
     private JButton updateTemplateButton;
+    private JButton deleteTemplateButton; 
     private MessageTemplate selectedTemplate;
     private JTable messageLogTable;
     private DefaultTableModel messageLogTableModel;
+
+    // RENAMED: Field for Central DB URL
+    private JTextField centralDbUrlInputField; 
+    private JLabel currentConfiguredUrlLabel;
+    private JButton saveDbConfigButton;
+    private JButton testDbConnectionButton;
+    private JButton clearDbConfigButton;
 
 
     private static final Color DARK_NAVY = new Color(26, 35, 126);
     private static final DateTimeFormatter LOG_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter TABLE_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
-    private JLabel currentConfiguredUrlLabel;
-    private JButton saveDbConfigButton;
-    private JButton testDbConnectionButton;
-    private JButton clearDbConfigButton;
 
 
     public DeveloperPanel(User user, Dashboard parentDashboard, DashboardCardsPanel cardsPanel) {
@@ -118,9 +130,9 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        tabbedPane.setBackground(new Color(200, 220, 255)); // Light blue background for the tabbed pane itself
+        tabbedPane.setBackground(new Color(200, 220, 255)); 
         tabbedPane.setForeground(DARK_NAVY);
-        tabbedPane.setPreferredSize(new Dimension(800, 600)); // Give it a preferred size hint
+        tabbedPane.setPreferredSize(new Dimension(800, 600)); 
 
         tabbedPane.addTab("Sync Configuration", createSyncConfigPanel());
         tabbedPane.addTab("Peer Management", createPeerManagementPanel());
@@ -131,11 +143,11 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         tabbedPane.addTab("Central DB Config", createCentralDbConfigPanel());
         tabbedPane.addTab("Data Export/Import", createDataExportImportPanel());
 
-        add(tabbedPane, BorderLayout.CENTER); // Add the tabbed pane to the center
+        add(tabbedPane, BorderLayout.CENTER); 
 
         logMessage("Developer Panel initialized.");
-        refreshData(); // Initial data load for all tabs
-        syncConfigManager.startSyncServices(); // Start sync services on startup
+        refreshData(); 
+        syncConfigManager.startSyncServices(); 
     }
 
     private JButton createStyledButton(String text, Color bgColor) {
@@ -162,7 +174,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     private void logMessage(String message) {
         if (syncLogArea != null) {
             syncLogArea.append(LocalDateTime.now().format(LOG_FORMATTER) + " - " + message + "\n");
-            syncLogArea.setCaretPosition(syncLogArea.getDocument().getLength()); // Scroll to bottom
+            syncLogArea.setCaretPosition(syncLogArea.getDocument().getLength()); 
         }
         if (liveSyncMonitorArea != null) {
             liveSyncMonitorArea.append(LocalDateTime.now().format(LOG_FORMATTER) + " - " + message + "\n");
@@ -173,7 +185,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     // --- Tab 1: Sync Role Configuration ---
     private JPanel createSyncConfigPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -191,16 +203,16 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
         gbc.gridy++;
         gbc.gridwidth = 1;
+        syncRoleComboBox = new JComboBox<>(new String[]{"SERVER", "CLIENT", "BOTH"});
         panel.add(new JLabel("Sync Role:"), gbc);
         gbc.gridx = 1;
-        syncRoleComboBox = new JComboBox<>(new String[]{"SERVER", "CLIENT", "BOTH"});
         panel.add(syncRoleComboBox, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
+        hybridSyncModeComboBox = new JComboBox<>(new String[]{"P2P_ONLY", "CENTRAL_API_ONLY", "HYBRID"});
         panel.add(new JLabel("Hybrid Sync Mode:"), gbc);
         gbc.gridx = 1;
-        hybridSyncModeComboBox = new JComboBox<>(new String[]{"P2P_ONLY", "CENTRAL_API_ONLY", "HYBRID"});
         panel.add(hybridSyncModeComboBox, gbc);
 
         gbc.gridx = 0;
@@ -233,7 +245,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     // --- Tab 2: Peer Management ---
     private JPanel createPeerManagementPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         // Top: Add Peer Form
@@ -376,7 +388,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     // --- Tab 3: Sync Settings ---
     private JPanel createSyncSettingsPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -437,6 +449,24 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         encryptionEnabledCheckBox.setOpaque(false);
         panel.add(encryptionEnabledCheckBox, gbc);
 
+        // NEW: Central API URL and Auth Token fields
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        panel.add(new JLabel("--- Central API Settings (for Hybrid Sync) ---"), gbc);
+        
+        gbc.gridwidth = 1;
+        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Central API URL:"), gbc);
+        gbc.gridx = 1; centralApiUrlInputField = new JTextField(25); panel.add(centralApiUrlInputField, gbc);
+
+        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Central API Auth Token:"), gbc);
+        gbc.gridx = 1; centralApiAuthTokenField = new JTextField(25); panel.add(centralApiAuthTokenField, gbc);
+
+        gbc.gridy++; gbc.gridx = 0; gbc.gridwidth = 2;
+        testCentralApiConnectionButton = createStyledButton("Test Central API Connection", new Color(0, 123, 255));
+        testCentralApiConnectionButton.addActionListener(e -> syncConfigManager.testCentralApiConnection());
+        panel.add(testCentralApiConnectionButton, gbc);
+
         gbc.gridx = 0;
         gbc.gridy++;
         gbc.gridwidth = 2;
@@ -459,6 +489,10 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         autoSyncEnabledCheckBox.setSelected(syncConfigManager.isAutoSyncEnabled());
         compressionEnabledCheckBox.setSelected(syncConfigManager.isCompressionEnabled());
         encryptionEnabledCheckBox.setSelected(syncConfigManager.isEncryptionEnabled());
+        
+        // Load Central API settings
+        centralApiUrlInputField.setText(syncConfigManager.getCentralApiUrl());
+        centralApiAuthTokenField.setText(AppConfig.getProperty(AppConfig.CENTRAL_API_AUTH_TOKEN_KEY, ""));
     }
 
     private void saveSyncSettings() {
@@ -468,13 +502,36 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         syncConfigManager.setAutoSyncEnabled(autoSyncEnabledCheckBox.isSelected());
         syncConfigManager.setCompressionEnabled(compressionEnabledCheckBox.isSelected());
         syncConfigManager.setEncryptionEnabled(encryptionEnabledCheckBox.isSelected());
+        
+        // Save Central API settings
+        String oldCentralApiUrl = AppConfig.getProperty(AppConfig.CENTRAL_API_URL_KEY, "");
+        String newCentralApiUrl = centralApiUrlInputField.getText().trim();
+        
+        logMessage("Attempting to save Central API URL: '" + newCentralApiUrl + "'");
+
+        syncConfigManager.setCentralApiUrl(newCentralApiUrl);
+        syncConfigManager.setCentralApiAuthToken(centralApiAuthTokenField.getText().trim());
+
         JOptionPane.showMessageDialog(this, "Advanced sync settings saved and services restarted if needed.", "Success", JOptionPane.INFORMATION_MESSAGE);
+
+        // Prompt for restart if Central API URL changed
+        if (!oldCentralApiUrl.equals(newCentralApiUrl)) {
+            int confirm = JOptionPane.showConfirmDialog(this, 
+                "The Central API URL has changed. For these changes to take full effect, the application needs to restart. Restart now?", 
+                "Restart Application", 
+                JOptionPane.YES_NO_OPTION, 
+                JOptionPane.QUESTION_MESSAGE);
+
+            if (confirm == JOptionPane.YES_OPTION) {
+                System.exit(0); // This will trigger the shutdown hook and restart the app
+            }
+        }
     }
 
     // --- Tab 4: Live Sync Monitor ---
     private JPanel createLiveSyncMonitorPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         JLabel title = new JLabel("Live Sync Activity Monitor");
@@ -491,9 +548,23 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         bottomPanel.setOpaque(false);
-        forceSyncNowButton = createStyledButton("Force Sync Now", new Color(0, 123, 255));
+        forceSyncNowButton = createStyledButton("Force All Syncs Now", new Color(0, 123, 255));
         forceSyncNowButton.addActionListener(e -> syncConfigManager.forceSyncNow());
         bottomPanel.add(forceSyncNowButton);
+
+        // NEW: Button for local-to-central DB sync
+        forceLocalToCentralDbSyncButton = createStyledButton("Force Local-to-Central DB Sync", new Color(255, 165, 0));
+        forceLocalToCentralDbSyncButton.addActionListener(e -> {
+            logMessage("User initiated Force Local-to-Central DB Sync.");
+            syncConfigManager.performLocalToCentralDbSync();
+        });
+        bottomPanel.add(forceLocalToCentralDbSyncButton);
+
+        // NEW: Clear Log Button
+        JButton clearLogButton = createStyledButton("Clear Log", new Color(108, 117, 125)); 
+        clearLogButton.addActionListener(e -> liveSyncMonitorArea.setText(""));
+        bottomPanel.add(clearLogButton);
+
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
         return panel;
@@ -502,85 +573,189 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     // --- Tab 5: System Update Broadcast ---
     private JPanel createSystemUpdateBroadcastPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE);
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        // Top: Broadcast Form
-        JPanel broadcastFormPanel = new JPanel(new GridBagLayout());
-        broadcastFormPanel.setOpaque(false);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.anchor = GridBagConstraints.WEST;
+        JLabel mainTitle = new JLabel("System Update Broadcast / Announcement");
+        mainTitle.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        mainTitle.setForeground(DARK_NAVY);
+        mainTitle.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(mainTitle, BorderLayout.NORTH);
 
-        JLabel title = new JLabel("Broadcast System Update / Announcement");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        title.setForeground(DARK_NAVY);
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
-        broadcastFormPanel.add(title, gbc);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        splitPane.setDividerLocation(0.5); 
+        splitPane.setResizeWeight(0.5);
+        splitPane.setOpaque(false);
+        splitPane.setBorder(BorderFactory.createEmptyBorder()); 
 
-        gbc.gridwidth = 1;
-        gbc.gridy++;
-        gbc.gridx = 0; broadcastFormPanel.add(new JLabel("Version:"), gbc);
-        gbc.gridx = 1; updateVersionField = new JTextField(20); broadcastFormPanel.add(updateVersionField, gbc);
+        splitPane.setLeftComponent(createPastBroadcastsPanel());
+        splitPane.setRightComponent(createBroadcastFormPanel());
 
-        gbc.gridy++;
-        gbc.gridx = 0; broadcastFormPanel.add(new JLabel("Title:"), gbc);
-        gbc.gridx = 1; updateTitleField = new JTextField(20); broadcastFormPanel.add(updateTitleField, gbc);
+        panel.add(splitPane, BorderLayout.CENTER);
 
-        gbc.gridy++;
-        gbc.gridx = 0; broadcastFormPanel.add(new JLabel("Message:"), gbc);
-        gbc.gridx = 1;
-        updateMessageArea = new JTextArea(5, 20);
-        updateMessageArea.setLineWrap(true);
-        updateMessageArea.setWrapStyleWord(true);
-        broadcastFormPanel.add(new JScrollPane(updateMessageArea), gbc);
+        loadSystemUpdateLog(); 
+        return panel;
+    }
 
-        gbc.gridy++;
-        gbc.gridx = 0; broadcastFormPanel.add(new JLabel("Notify Roles (select multiple):"), gbc);
-        gbc.gridx = 1;
-        String[] roles = {"All Users", "Reception", "Planning", "Committee", "Director", "Structural", "Client", "Admin"};
-        updateTargetRoleComboBox = new JComboBox<>(roles);
-        updateTargetRoleComboBox.setRenderer(new CheckBoxListRenderer());
-        updateTargetRoleComboBox.addActionListener(new CheckBoxListSelector(updateTargetRoleComboBox));
-        broadcastFormPanel.add(updateTargetRoleComboBox, gbc);
-
-        gbc.gridy++;
-        gbc.gridx = 0; gbc.gridwidth = 2;
-        sendUpdateButton = createStyledButton("Send Update Notification", new Color(255, 165, 0));
-        sendUpdateButton.addActionListener(e -> sendSystemUpdate());
-        broadcastFormPanel.add(sendUpdateButton, gbc);
-
-        panel.add(broadcastFormPanel, BorderLayout.NORTH);
-
-        // Center: Past Broadcasts Log
-        JLabel logTitle = new JLabel("Past Broadcasts");
-        logTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        logTitle.setForeground(DARK_NAVY);
-        logTitle.setBorder(new EmptyBorder(10, 0, 5, 0));
-        panel.add(logTitle, BorderLayout.CENTER); // This will be replaced by the scroll pane
+    private JPanel createPastBroadcastsPanel() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setOpaque(false);
+        panel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), "Past Broadcasts"));
 
         String[] logColumnNames = {"ID", "Timestamp", "Version", "Title", "Message"};
         systemUpdateLogTableModel = new DefaultTableModel(logColumnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public Class<?> getColumnClass(int column) {
+                // Column 4 is "Message", which is a String. No need to return Boolean.class.
+                // The default Object.class handling by super.getColumnClass(column) is appropriate.
+                // if (column == 4) return Boolean.class; // Removed this incorrect line
+                return super.getColumnClass(column);
+            }
         };
         systemUpdateLogTable = new JTable(systemUpdateLogTableModel);
         systemUpdateLogTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         systemUpdateLogTable.setRowHeight(20);
         systemUpdateLogTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        systemUpdateLogTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); 
+        systemUpdateLogTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting() && systemUpdateLogTable.getSelectedRow() != -1) {
+                    loadSelectedBroadcastDetails();
+                } else if (systemUpdateLogTable.getSelectedRow() == -1) {
+                    clearBroadcastForm();
+                }
+            }
+        });
+
         // Hide ID column
         TableColumn idColumn = systemUpdateLogTable.getColumnModel().getColumn(0);
         idColumn.setMinWidth(0); idColumn.setMaxWidth(0); idColumn.setPreferredWidth(0); idColumn.setResizable(false);
 
         JScrollPane logScrollPane = new JScrollPane(systemUpdateLogTable);
-        panel.add(logScrollPane, BorderLayout.SOUTH); // Add to SOUTH to make it appear below the form
+        panel.add(logScrollPane, BorderLayout.CENTER);
 
-        loadSystemUpdateLog();
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        buttonPanel.setOpaque(false);
+
+        deleteBroadcastButton = createStyledButton("Delete Selected", new Color(220, 53, 69)); 
+        deleteBroadcastButton.addActionListener(e -> deleteSystemUpdate());
+        deleteBroadcastButton.setEnabled(false);
+        buttonPanel.add(deleteBroadcastButton);
+
+        // Edit button will trigger loading into the form, the form itself will have the 'Update' button
+        JButton editButton = createStyledButton("Edit Selected", new Color(0, 123, 255)); 
+        editButton.addActionListener(e -> loadSelectedBroadcastDetails()); 
+        editButton.setEnabled(false); 
+        buttonPanel.add(editButton);
+
+        // Enable/disable edit/delete buttons based on table selection
+        systemUpdateLogTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                boolean rowSelected = systemUpdateLogTable.getSelectedRow() != -1;
+                deleteBroadcastButton.setEnabled(rowSelected);
+                editButton.setEnabled(rowSelected);
+            }
+        });
+
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+
         return panel;
     }
 
-    private void sendSystemUpdate() {
+    private JPanel createBroadcastFormPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(false);
+        panel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), "New / Edit Broadcast"));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+
+        gbc.gridx = 0; gbc.gridy = 0;
+        panel.add(new JLabel("Version:"), gbc);
+        gbc.gridx = 1; updateVersionField = new JTextField(20); panel.add(updateVersionField, gbc);
+
+        gbc.gridx = 0; gbc.gridy++;
+        panel.add(new JLabel("Title:"), gbc);
+        gbc.gridx = 1; updateTitleField = new JTextField(20); panel.add(updateTitleField, gbc);
+
+        gbc.gridx = 0; gbc.gridy++;
+        panel.add(new JLabel("Message:"), gbc);
+        gbc.gridx = 1;
+        updateMessageArea = new JTextArea(5, 20);
+        updateMessageArea.setLineWrap(true);
+        updateMessageArea.setWrapStyleWord(true);
+        panel.add(new JScrollPane(updateMessageArea), gbc);
+
+        gbc.gridx = 0; gbc.gridy++;
+        panel.add(new JLabel("Notify Role:"), gbc); 
+        gbc.gridx = 1;
+        String[] roles = {"All Users", "Reception", "Planning", "Committee", "Director", "Structural", "Client", "Admin"};
+        updateTargetRoleComboBox = new JComboBox<>(roles);
+        panel.add(updateTargetRoleComboBox, gbc);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        buttonPanel.setOpaque(false);
+
+        addNewBroadcastButton = createStyledButton("Add New Broadcast", new Color(40, 167, 69)); 
+        addNewBroadcastButton.addActionListener(e -> addNewSystemUpdate());
+        buttonPanel.add(addNewBroadcastButton);
+
+        updateBroadcastButton = createStyledButton("Update Broadcast", new Color(0, 123, 255)); 
+        updateBroadcastButton.addActionListener(e -> updateSystemUpdate());
+        updateBroadcastButton.setEnabled(false);
+        buttonPanel.add(updateBroadcastButton);
+
+        clearBroadcastFormButton = createStyledButton("Clear Form", new Color(108, 117, 125)); 
+        clearBroadcastFormButton.addActionListener(e -> clearBroadcastForm());
+        buttonPanel.add(clearBroadcastFormButton);
+
+        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
+        panel.add(buttonPanel, gbc);
+
+        gbc.gridy++;
+        gbc.weighty = 1.0; 
+        panel.add(Box.createVerticalGlue(), gbc);
+
+        return panel;
+    }
+
+    private void loadSelectedBroadcastDetails() {
+        int selectedRow = systemUpdateLogTable.getSelectedRow();
+        if (selectedRow != -1) {
+            int updateId = (int) systemUpdateLogTable.getValueAt(selectedRow, 0);
+            List<SystemUpdate> allUpdates = Database.getAllSystemUpdates();
+            selectedSystemUpdate = allUpdates.stream().filter(u -> u.getId() == updateId).findFirst().orElse(null);
+
+            if (selectedSystemUpdate != null) {
+                updateVersionField.setText(selectedSystemUpdate.getVersion() != null ? selectedSystemUpdate.getVersion() : "");
+                updateTitleField.setText(selectedSystemUpdate.getTitle());
+                updateMessageArea.setText(selectedSystemUpdate.getMessage());
+
+                updateTargetRoleComboBox.setSelectedItem("All Users"); 
+
+                addNewBroadcastButton.setEnabled(false);
+                updateBroadcastButton.setEnabled(true);
+            }
+        }
+    }
+
+    private void clearBroadcastForm() {
+        selectedSystemUpdate = null;
+        updateVersionField.setText("");
+        updateTitleField.setText("");
+        updateMessageArea.setText("");
+        updateTargetRoleComboBox.setSelectedItem("All Users"); 
+        addNewBroadcastButton.setEnabled(true);
+        updateBroadcastButton.setEnabled(false);
+        systemUpdateLogTable.clearSelection(); 
+    }
+
+    private void addNewSystemUpdate() { 
         String version = updateVersionField.getText().trim();
         String title = updateTitleField.getText().trim();
         String message = updateMessageArea.getText().trim();
@@ -590,34 +765,64 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
             return;
         }
 
-        List<String> selectedRoles = new ArrayList<>();
-        if (updateTargetRoleComboBox.getSelectedItem() instanceof String[]) {
-            String[] selectedItems = (String[]) updateTargetRoleComboBox.getSelectedItem();
-            for (String item : selectedItems) {
-                if (item.equals("All Users")) {
-                    selectedRoles.clear(); // If 'All Users' is selected, clear others
-                    break;
-                }
-                selectedRoles.add(item);
-            }
-        } else if (updateTargetRoleComboBox.getSelectedItem() != null) {
-            String selectedItem = (String) updateTargetRoleComboBox.getSelectedItem();
-            if (selectedItem.equals("All Users")) {
-                selectedRoles.clear();
-            } else {
-                selectedRoles.add(selectedItem);
-            }
+        List<String> targetRoles = null;
+        String selectedRole = (String) updateTargetRoleComboBox.getSelectedItem();
+        if (selectedRole != null && !selectedRole.equals("All Users")) {
+            targetRoles = List.of(selectedRole); 
         }
 
         SystemUpdate update = new SystemUpdate(version.isEmpty() ? null : version, title, message);
-        communicationManager.broadcastSystemUpdate(update, selectedRoles.isEmpty() ? null : selectedRoles);
+        communicationManager.broadcastSystemUpdate(update, targetRoles);
 
         JOptionPane.showMessageDialog(this, "System update broadcast initiated.", "Success", JOptionPane.INFORMATION_MESSAGE);
-        updateVersionField.setText("");
-        updateTitleField.setText("");
-        updateMessageArea.setText("");
-        updateTargetRoleComboBox.setSelectedIndex(0); // Reset to "All Users" or default
+        clearBroadcastForm();
         loadSystemUpdateLog();
+    }
+
+    private void updateSystemUpdate() {
+        if (selectedSystemUpdate == null) {
+            JOptionPane.showMessageDialog(this, "No broadcast selected for update.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String version = updateVersionField.getText().trim();
+        String title = updateTitleField.getText().trim();
+        String message = updateMessageArea.getText().trim();
+
+        if (title.isEmpty() || message.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Title and Message cannot be empty.", "Input Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        selectedSystemUpdate.setVersion(version.isEmpty() ? null : version);
+        selectedSystemUpdate.setTitle(title);
+        selectedSystemUpdate.setMessage(message);
+
+        if (Database.updateSystemUpdate(selectedSystemUpdate)) {
+            JOptionPane.showMessageDialog(this, "Broadcast updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            clearBroadcastForm();
+            loadSystemUpdateLog();
+        } else {
+            JOptionPane.showMessageDialog(this, "Failed to update broadcast.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void deleteSystemUpdate() {
+        if (selectedSystemUpdate == null) {
+            JOptionPane.showMessageDialog(this, "No broadcast selected for deletion.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete the broadcast '" + selectedSystemUpdate.getTitle() + "'?", "Confirm Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            if (Database.deleteSystemUpdate(selectedSystemUpdate.getId())) { 
+                JOptionPane.showMessageDialog(this, "Broadcast deleted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                clearBroadcastForm();
+                loadSystemUpdateLog();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to delete broadcast.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     private void loadSystemUpdateLog() {
@@ -634,112 +839,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         }
     }
 
-    // Custom Renderer for CheckBoxList
-    class CheckBoxListRenderer extends JComboBox<String> implements ListCellRenderer<String> {
-        private JCheckBox checkbox;
-
-        public CheckBoxListRenderer() {
-            setOpaque(true);
-            checkbox = new JCheckBox();
-            checkbox.setOpaque(true);
-        }
-
-        @Override
-        public Component getListCellRendererComponent(JList<? extends String> list, String value, int index, boolean isSelected, boolean cellHasFocus) {
-            checkbox.setBackground(isSelected ? list.getSelectionBackground() : list.getBackground());
-            checkbox.setForeground(isSelected ? list.getSelectionForeground() : list.getForeground());
-            checkbox.setText(value);
-            // This is a simplified approach. For actual multi-selection, you'd need to manage
-            // the checked state based on a separate model or the JComboBox's selected items.
-            // For now, it just displays the text. The CheckBoxListSelector handles the logic.
-            return checkbox;
-        }
-    }
-
-    // Custom ActionListener for CheckBoxList to handle multiple selections
-    class CheckBoxListSelector implements ActionListener {
-        private JComboBox<String> comboBox;
-        private boolean[] selectedFlags;
-        private String[] items;
-
-        public CheckBoxListSelector(JComboBox<String> comboBox) {
-            this.comboBox = comboBox;
-            this.items = new String[comboBox.getModel().getSize()];
-            for (int i = 0; i < items.length; i++) {
-                items[i] = comboBox.getModel().getElementAt(i);
-            }
-            selectedFlags = new boolean[items.length];
-            // Initialize "All Users" as selected by default
-            if (items.length > 0 && items[0].equals("All Users")) {
-                selectedFlags[0] = true;
-            }
-        }
-
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            if (e.getSource() instanceof JComboBox) {
-                JComboBox<?> source = (JComboBox<?>) e.getSource();
-                int index = source.getSelectedIndex();
-                if (index < 0) return;
-
-                // Toggle the selected state for the clicked item
-                selectedFlags[index] = !selectedFlags[index];
-
-                // Special handling for "All Users"
-                if (items[index].equals("All Users")) {
-                    if (selectedFlags[index]) {
-                        // If "All Users" is checked, uncheck all others
-                        Arrays.fill(selectedFlags, false);
-                        selectedFlags[index] = true;
-                    } else {
-                        // If "All Users" is unchecked, ensure at least one other is selected or it becomes the only option
-                        boolean anyOtherSelected = false;
-                        for (int i = 1; i < selectedFlags.length; i++) {
-                            if (selectedFlags[i]) {
-                                anyOtherSelected = true;
-                                break;
-                            }
-                        }
-                        if (!anyOtherSelected && items.length > 1) {
-                            // If no other is selected, re-select "All Users" to prevent empty selection
-                            selectedFlags[index] = true;
-                        }
-                    }
-                } else {
-                    // If any other role is selected, uncheck "All Users"
-                    if (selectedFlags[index] && items.length > 0 && items[0].equals("All Users")) {
-                        selectedFlags[0] = false;
-                    }
-                    // If all other roles are deselected, and "All Users" is not selected, select "All Users"
-                    boolean anyOtherSelected = false;
-                    for (int i = 1; i < selectedFlags.length; i++) {
-                        if (selectedFlags[i]) {
-                            anyOtherSelected = true;
-                            break;
-                        }
-                    }
-                    if (!anyOtherSelected && items.length > 0 && items[0].equals("All Users")) {
-                        selectedFlags[0] = true;
-                    }
-                }
-
-                // Update the JComboBox's displayed selection
-                List<String> currentSelections = new ArrayList<>();
-                for (int i = 0; i < items.length; i++) {
-                    if (selectedFlags[i]) {
-                        currentSelections.add(items[i]);
-                    }
-                }
-                if (currentSelections.isEmpty() && items.length > 0) {
-                    // Fallback: if somehow nothing is selected, select "All Users"
-                    currentSelections.add(items[0]);
-                    selectedFlags[0] = true;
-                }
-                comboBox.setSelectedItem(currentSelections.toArray(new String[0]));
-            }
-        }
-    }
-
 
     // --- Tab 6: Communication Settings ---
     private JPanel createCommunicationSettingsPanel() {
@@ -748,7 +847,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
         JTabbedPane commTabbedPane = new JTabbedPane();
         commTabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        commTabbedPane.setBackground(Color.WHITE); // Reverted to default white
+        commTabbedPane.setBackground(Color.WHITE); 
 
         commTabbedPane.addTab("Email/SMS Config", createEmailSmsConfigPanel());
         commTabbedPane.addTab("Message Templates", createMessageTemplatesPanel());
@@ -783,7 +882,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMTP Username:"), gbc);
         gbc.gridx = 1; smtpUsernameField = new JTextField(25); panel.add(smtpUsernameField, gbc);
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMTP Password:"), gbc);
-        gbc.gridx = 1; smtpPasswordField = new JPasswordField(25); panel.add(smtpPasswordField, gbc); // Corrected type
+        gbc.gridx = 1; smtpPasswordField = new JPasswordField(25); panel.add(smtpPasswordField, gbc); 
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Sender Email:"), gbc);
         gbc.gridx = 1; senderEmailField = new JTextField(25); panel.add(senderEmailField, gbc);
 
@@ -823,7 +922,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         smtpHostField.setText(AppConfig.getProperty(AppConfig.SMTP_HOST_KEY, ""));
         smtpPortField.setText(String.valueOf(AppConfig.getIntProperty(AppConfig.SMTP_PORT_KEY, 587)));
         smtpUsernameField.setText(AppConfig.getProperty(AppConfig.SMTP_USERNAME_KEY, ""));
-        smtpPasswordField.setText(AppConfig.getProperty(AppConfig.SMTP_PASSWORD_KEY, "")); // Be cautious with displaying passwords
+        smtpPasswordField.setText(AppConfig.getProperty(AppConfig.SMTP_PASSWORD_KEY, "")); 
         senderEmailField.setText(AppConfig.getProperty(AppConfig.SENDER_EMAIL_KEY, ""));
         smsApiKeyField.setText(AppConfig.getProperty(AppConfig.SMS_API_KEY, ""));
         smsSenderIdField.setText(AppConfig.getProperty(AppConfig.SMS_SENDER_ID_KEY, ""));
@@ -863,21 +962,31 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         messageTemplatesTableModel = new DefaultTableModel(templateColumnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public Class<?> getColumnClass(int column) {
+                if (column == 4) return Boolean.class;
+                return super.getColumnClass(column);
+            }
         };
         messageTemplatesTable = new JTable(messageTemplatesTableModel);
         messageTemplatesTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         messageTemplatesTable.setRowHeight(20);
         messageTemplatesTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        messageTemplatesTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); 
         messageTemplatesTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && messageTemplatesTable.getSelectedRow() != -1) {
                 loadSelectedTemplateDetails();
+            } else if (messageTemplatesTable.getSelectedRow() == -1) {
+                clearTemplateForm(); 
             }
         });
         // Hide ID column
         TableColumn idColumn = messageTemplatesTable.getColumnModel().getColumn(0);
         idColumn.setMinWidth(0); idColumn.setMaxWidth(0); idColumn.setPreferredWidth(0); idColumn.setResizable(false);
 
-        panel.add(new JScrollPane(messageTemplatesTable), BorderLayout.NORTH);
+        JScrollPane tableScrollPane = new JScrollPane(messageTemplatesTable);
+        tableScrollPane.setPreferredSize(new Dimension(400, 200)); 
+        panel.add(tableScrollPane, BorderLayout.NORTH);
 
         // Center: Template Editor
         JPanel editorPanel = new JPanel(new GridBagLayout());
@@ -905,17 +1014,26 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         templateBodyArea = new JTextArea(10, 30);
         templateBodyArea.setLineWrap(true);
         templateBodyArea.setWrapStyleWord(true);
-        editorPanel.add(new JScrollPane(templateBodyArea), gbc);
+        JScrollPane bodyScrollPane = new JScrollPane(templateBodyArea);
+        gbc.weightx = 1.0; 
+        gbc.weighty = 1.0; 
+        gbc.fill = GridBagConstraints.BOTH; 
+        editorPanel.add(bodyScrollPane, gbc);
 
-        gbc.gridy++; gbc.gridx = 0; gbc.gridwidth = 2;
+        // Buttons
+        gbc.gridy++; gbc.gridx = 0; gbc.gridwidth = 1;
+        gbc.weighty = 0; 
+        gbc.fill = GridBagConstraints.HORIZONTAL; 
         updateTemplateButton = createStyledButton("Update Template", new Color(0, 123, 255));
         updateTemplateButton.addActionListener(e -> updateMessageTemplate());
         updateTemplateButton.setEnabled(false);
         editorPanel.add(updateTemplateButton, gbc);
 
-        gbc.gridy++;
-        gbc.weighty = 1.0;
-        editorPanel.add(Box.createVerticalGlue(), gbc);
+        gbc.gridx = 1; 
+        deleteTemplateButton = createStyledButton("Delete Template", new Color(220, 53, 69)); 
+        deleteTemplateButton.addActionListener(e -> deleteMessageTemplate());
+        deleteTemplateButton.setEnabled(false);
+        editorPanel.add(deleteTemplateButton, gbc);
 
         panel.add(editorPanel, BorderLayout.CENTER);
 
@@ -948,6 +1066,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
                 templateBodyArea.setText(selectedTemplate.getBody());
                 templateTypeComboBox.setSelectedItem(selectedTemplate.getType());
                 updateTemplateButton.setEnabled(true);
+                deleteTemplateButton.setEnabled(true); 
             }
         } else {
             clearTemplateForm();
@@ -960,6 +1079,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         templateBodyArea.setText("");
         templateTypeComboBox.setSelectedIndex(0);
         updateTemplateButton.setEnabled(false);
+        deleteTemplateButton.setEnabled(false); 
     }
 
     private void updateMessageTemplate() {
@@ -970,8 +1090,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
         selectedTemplate.setSubject(templateSubjectField.getText().trim());
         selectedTemplate.setBody(templateBodyArea.getText().trim());
-        // Type is not editable via UI for existing templates, but can be set if needed
-        // selectedTemplate.setType((String) templateTypeComboBox.getSelectedItem());
 
         if (communicationManager.updateMessageTemplate(selectedTemplate)) {
             JOptionPane.showMessageDialog(this, "Message template updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
@@ -979,6 +1097,24 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
             clearTemplateForm();
         } else {
             JOptionPane.showMessageDialog(this, "Failed to update message template.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void deleteMessageTemplate() {
+        if (selectedTemplate == null) {
+            JOptionPane.showMessageDialog(this, "Please select a template to delete.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete template '" + selectedTemplate.getTemplateName() + "'?", "Confirm Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            if (Database.deleteMessageTemplate(selectedTemplate.getId())) { 
+                JOptionPane.showMessageDialog(this, "Message template deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                loadMessageTemplates();
+                clearTemplateForm();
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to delete message template.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -1030,7 +1166,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     // --- Tab 7: Central DB Configuration (Existing, moved to tab) ---
     private JPanel createCentralDbConfigPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -1056,24 +1192,24 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         gbc.gridy++;
         panel.add(new JLabel("New Central DB URL (JDBC format):"), gbc);
         gbc.gridy++;
-        centralApiUrlField = new JTextField(50); // Re-using centralApiUrlField for consistency
-        centralApiUrlField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        centralApiUrlField.putClientProperty("JTextField.placeholderText", "e.g., jdbc:postgresql://host:port/database?user=u&password=p");
-        panel.add(centralApiUrlField, gbc);
+        centralDbUrlInputField = new JTextField(50); // Now using the dedicated field
+        centralDbUrlInputField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        centralDbUrlInputField.putClientProperty("JTextField.placeholderText", "e.g., jdbc:postgresql://host:port/database?user=u&password=p");
+        panel.add(centralDbUrlInputField, gbc);
 
         gbc.gridy++;
         JPanel dbButtonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         dbButtonsPanel.setOpaque(false);
 
-        saveDbConfigButton = createStyledButton("Save Configuration", new Color(40, 167, 69)); // Green
+        saveDbConfigButton = createStyledButton("Save Configuration", new Color(40, 167, 69)); 
         saveDbConfigButton.addActionListener(e -> saveCentralDbConfig());
         dbButtonsPanel.add(saveDbConfigButton);
 
-        testDbConnectionButton = createStyledButton("Test Connection", new Color(0, 123, 255)); // Blue
+        testDbConnectionButton = createStyledButton("Test Connection", new Color(0, 123, 255)); 
         testDbConnectionButton.addActionListener(e -> testCentralDbConnection());
         dbButtonsPanel.add(testDbConnectionButton);
 
-        clearDbConfigButton = createStyledButton("Clear Configuration", new Color(255, 165, 0)); // Orange
+        clearDbConfigButton = createStyledButton("Clear Configuration", new Color(255, 165, 0)); 
         clearDbConfigButton.addActionListener(e -> clearCentralDbConfig());
         dbButtonsPanel.add(clearDbConfigButton);
 
@@ -1086,7 +1222,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         panel.add(restartNote, gbc);
 
         gbc.gridy++;
-        gbc.weighty = 1.0; // Allow components to push to top
+        gbc.weighty = 1.0; 
         panel.add(Box.createVerticalGlue(), gbc);
 
         updateCentralDbUrlDisplay();
@@ -1097,34 +1233,59 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         String currentUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY);
         if (currentUrl != null && !currentUrl.trim().isEmpty()) {
             currentConfiguredUrlLabel.setText(currentUrl);
-            centralApiUrlField.setText(currentUrl); // Pre-fill the input field with current config
+            centralDbUrlInputField.setText(currentUrl); 
         } else {
             currentConfiguredUrlLabel.setText("Not configured (using local SQLite)");
-            centralApiUrlField.setText("");
+            centralDbUrlInputField.setText("");
         }
     }
 
     private void saveCentralDbConfig() {
-        String newUrl = centralApiUrlField.getText().trim();
+        String newUrl = centralDbUrlInputField.getText().trim();
+        String oldUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY, "");
+
         if (newUrl.isEmpty()) {
             int confirm = JOptionPane.showConfirmDialog(this, "The URL field is empty. This will clear the central database configuration and the app will use local SQLite. Continue?", "Confirm Clear Configuration", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (confirm == JOptionPane.YES_OPTION) {
                 AppConfig.removeProperty(AppConfig.CENTRAL_DB_URL_KEY);
                 logMessage("Central DB URL configuration cleared.");
-                JOptionPane.showMessageDialog(this, "Central database configuration cleared. Restart the application for changes to take effect.", "Configuration Saved", JOptionPane.INFORMATION_MESSAGE);
+                
+                int confirmRestart = JOptionPane.showConfirmDialog(this, 
+                    "Central database configuration cleared. Restart the application for changes to take effect. Restart now?", 
+                    "Restart Application", 
+                    JOptionPane.YES_NO_OPTION, 
+                    JOptionPane.QUESTION_MESSAGE);
+
+                if (confirmRestart == JOptionPane.YES_OPTION) {
+                    System.exit(0); // This will trigger the shutdown hook and restart the app
+                }
             } else {
-                return; // Do not save if user cancels
+                return; 
             }
         } else {
             AppConfig.setProperty(AppConfig.CENTRAL_DB_URL_KEY, newUrl);
             logMessage("Central DB URL configuration saved: " + newUrl);
-            JOptionPane.showMessageDialog(this, "Central database URL saved. Restart the application for changes to take effect.", "Configuration Saved", JOptionPane.INFORMATION_MESSAGE);
+            
+            // Prompt for restart if the URL actually changed
+            if (!oldUrl.equals(newUrl)) {
+                int confirmRestart = JOptionPane.showConfirmDialog(this, 
+                    "Central database URL saved. For these changes to take full effect, the application needs to restart. Restart now?", 
+                    "Restart Application", 
+                    JOptionPane.YES_NO_OPTION, 
+                    JOptionPane.QUESTION_MESSAGE);
+
+                if (confirmRestart == JOptionPane.YES_OPTION) {
+                    System.exit(0); // This will trigger the shutdown hook and restart the app
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "Central database URL saved. No restart needed as URL did not change.", "Configuration Saved", JOptionPane.INFORMATION_MESSAGE);
+            }
         }
         updateCentralDbUrlDisplay();
     }
 
     private void testCentralDbConnection() {
-        String testUrl = centralApiUrlField.getText().trim();
+        String testUrl = centralDbUrlInputField.getText().trim();
         if (testUrl.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter a URL to test.", "Input Error", JOptionPane.ERROR_MESSAGE);
             return;
@@ -1147,15 +1308,25 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         if (confirm == JOptionPane.YES_OPTION) {
             AppConfig.removeProperty(AppConfig.CENTRAL_DB_URL_KEY);
             logMessage("Central DB URL configuration cleared.");
-            JOptionPane.showMessageDialog(this, "Central database configuration cleared. Restart the application for changes to take effect.", "Configuration Cleared", JOptionPane.INFORMATION_MESSAGE);
-            updateCentralDbUrlDisplay();
+            
+            // Prompt for restart after clearing
+            int confirmRestart = JOptionPane.showConfirmDialog(this, 
+                "Central database configuration cleared. For these changes to take full effect, the application needs to restart. Restart now?", 
+                "Restart Application", 
+                JOptionPane.YES_NO_OPTION, 
+                JOptionPane.QUESTION_MESSAGE);
+
+            if (confirmRestart == JOptionPane.YES_OPTION) {
+                System.exit(0); // This will trigger the shutdown hook and restart the app
+            }
         }
+        updateCentralDbUrlDisplay();
     }
 
     // --- Tab 8: Data Export/Import (Existing, moved to tab) ---
     private JPanel createDataExportImportPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE); // Reverted to default white
+        panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -1166,25 +1337,18 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         gbc.gridy = 0;
         gbc.gridwidth = 2;
 
-        // Removed the original sectionTitle to avoid redundancy with JTabbedPane's tab title
-        // JLabel contentTitle = new JLabel("Data Export/Import Operations"); // REMOVED
-        // contentTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        // contentTitle.setForeground(DARK_NAVY);
-        // panel.add(contentTitle, gbc);
-
-        // Buttons Panel
         JPanel syncButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         syncButtonPanel.setOpaque(false);
 
-        exportDataButton = createStyledButton("Export All Data", new Color(40, 167, 69)); // Green
+        exportDataButton = createStyledButton("Export All Data", new Color(40, 167, 69)); 
         exportDataButton.addActionListener(e -> exportAllData());
         syncButtonPanel.add(exportDataButton);
 
-        importDataButton = createStyledButton("Import All Data", new Color(0, 123, 255)); // Blue
+        importDataButton = createStyledButton("Import All Data", new Color(0, 123, 255)); 
         importDataButton.addActionListener(e -> importAllData());
         syncButtonPanel.add(importDataButton);
 
-        viewInstancesButton = createStyledButton("View App Instances", new Color(108, 117, 125)); // Grey
+        viewInstancesButton = createStyledButton("View App Instances", new Color(108, 117, 125)); 
         viewInstancesButton.addActionListener(e -> viewAppInstances());
         syncButtonPanel.add(viewInstancesButton);
 
@@ -1205,7 +1369,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         panel.add(logTitle, gbc);
 
         gbc.gridy++;
-        gbc.weighty = 1.0; // Allow log area to expand vertically
+        gbc.weighty = 1.0; 
         gbc.fill = GridBagConstraints.BOTH;
         syncLogArea = new JTextArea(15, 60);
         syncLogArea.setEditable(false);
@@ -1232,11 +1396,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
                 fileToSave = new File(fileToSave.getAbsolutePath() + ".json");
             }
             
-            // --- Placeholder for actual export logic ---
-            // In a real implementation, you would read data from all tables (users, plans, documents, billing, logs, meetings, document_checklist_items)
-            // and write it to the selected file in a structured format (e.g., JSON).
-            // This would involve iterating through ResultSet objects for each table and building a data structure.
-            // For now, we'll just simulate success.
             logMessage("Simulating export to: " + fileToSave.getAbsolutePath());
             JOptionPane.showMessageDialog(this, "Data export simulated successfully to " + fileToSave.getName() + "!", "Export Success", JOptionPane.INFORMATION_MESSAGE);
             logMessage("Data export completed.");
@@ -1256,19 +1415,11 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         if (userSelection == JFileChooser.APPROVE_OPTION) {
             File fileToLoad = fileChooser.getSelectedFile();
             
-            // --- Placeholder for actual import logic ---
-            // In a real implementation, you would read data from the selected file,
-            // parse it (e.g., from JSON), and then insert/update records in your database.
-            // This would require careful handling of primary keys, foreign key constraints,
-            // and conflict resolution strategies (e.g., overwrite, skip, merge).
-            // For now, we'll just simulate success.
             logMessage("Simulating import from: " + fileToLoad.getAbsolutePath());
             JOptionPane.showMessageDialog(this, "Data import simulated successfully from " + fileToLoad.getName() + "!", "Import Success", JOptionPane.INFORMATION_MESSAGE);
             logMessage("Data import completed. (Note: Actual data changes would require a rebuild/restart to reflect in UI if not dynamically loaded)");
-            // After a real import, you might want to refresh all panels or restart the app.
             parentDashboard.revalidate();
             parentDashboard.repaint();
-            // For a full refresh, a restart might be needed depending on how data is cached.
         } else {
             logMessage("Data import cancelled.");
         }
@@ -1276,13 +1427,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
     private void viewAppInstances() {
         logMessage("Attempting to view app instances...");
-        // --- Placeholder for actual instance discovery logic ---
-        // This is highly dependent on how "app instances" are defined and how they communicate.
-        // For a local desktop app, this might involve:
-        // 1. Scanning for other running instances on the local machine (complex).
-        // 2. Connecting to a central registry/server that tracks active instances.
-        // 3. Simply listing known database files if each instance uses a separate file.
-            // For now, we'll provide a conceptual message.
         String instancesInfo = "Currently, DocLink operates with local SQLite databases.\n" +
                                "To 'sync' between instances, you would typically export data from one instance\n" +
                                "and import it into another. Future enhancements could involve:\n" +
@@ -1300,20 +1444,21 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         int systemUpdates = Database.getAllSystemUpdates().size();
         int messageTemplates = Database.getAllMessageTemplates().size();
 
-        cardsPanel.updateCard(0, "Total Peers", totalPeers, new Color(0, 123, 255)); // Blue
-        cardsPanel.updateCard(1, "System Updates Logged", systemUpdates, new Color(255, 165, 0)); // Orange
-        cardsPanel.updateCard(2, "Message Templates", messageTemplates, new Color(40, 167, 69)); // Green
+        cardsPanel.updateCard(0, "Total Peers", totalPeers, new Color(0, 123, 255)); 
+        cardsPanel.updateCard(1, "System Updates Logged", systemUpdates, new Color(255, 165, 0)); 
+        cardsPanel.updateCard(2, "Message Templates", messageTemplates, new Color(40, 167, 69)); 
 
         logMessage("Developer Panel data refreshed.");
-        updateCentralDbUrlDisplay(); // Ensure the display is up-to-date
+        updateCentralDbUrlDisplay(); 
 
         // Refresh data for all sub-panels
         loadSyncConfig();
         loadPeerData();
         loadSyncSettings();
-        loadSystemUpdateLog();
+        loadSystemUpdateLog(); 
         loadCommunicationSettings();
         loadMessageTemplates();
         loadMessageLogs();
+        clearBroadcastForm(); 
     }
 }

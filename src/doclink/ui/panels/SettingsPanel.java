@@ -2,9 +2,9 @@ package doclink.ui.panels;
 
 import doclink.Database;
 import doclink.models.User;
-import doclink.models.UserPreference; // NEW: Import UserPreference
+import doclink.models.UserPreference;
 import doclink.ui.Dashboard;
-import doclink.ui.DashboardCardsPanel; // Needed for Dashboard.Refreshable interface, even if not directly using cards
+import doclink.ui.DashboardCardsPanel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -384,7 +384,17 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         boolean emailEnabled = emailNotificationsCheckBox.isSelected();
         boolean smsEnabled = smsNotificationsCheckBox.isSelected();
 
-        UserPreference preferences = new UserPreference(currentUser.getId(), emailEnabled, smsEnabled);
+        UserPreference preferences = Database.getUserPreferences(currentUser.getId()); // Try to load existing
+        if (preferences != null) {
+            // Update existing preferences, preserving lastSeenUpdateId
+            preferences.setEmailNotificationsEnabled(emailEnabled);
+            preferences.setSmsNotificationsEnabled(smsEnabled);
+            // lastSeenUpdateId remains unchanged as this panel doesn't manage it
+        } else {
+            // Create new preferences with default lastSeenUpdateId = 0
+            preferences = new UserPreference(currentUser.getId(), emailEnabled, smsEnabled, 0);
+        }
+
         if (Database.saveUserPreferences(preferences)) {
             JOptionPane.showMessageDialog(this, "Notification preferences saved successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
         } else {
