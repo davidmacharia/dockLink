@@ -64,6 +64,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     private JCheckBox autoSyncEnabledCheckBox;
     private JCheckBox compressionEnabledCheckBox;
     private JCheckBox encryptionEnabledCheckBox;
+    private JCheckBox deleteLocalOnCentralPullCheckBox; // NEW: Checkbox for deleteLocalOnCentralPull
     
     // NEW: Separate field for Central API URL
     private JTextField centralApiUrlInputField; 
@@ -308,6 +309,8 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         peerTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         peerTable.setRowHeight(20);
         peerTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        peerTable.getTableHeader().setBackground(new Color(230, 230, 230));
+        peerTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         peerTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && peerTable.getSelectedRow() != -1) {
                 removePeerButton.setEnabled(true);
@@ -449,6 +452,14 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         encryptionEnabledCheckBox.setOpaque(false);
         panel.add(encryptionEnabledCheckBox, gbc);
 
+        // NEW: Delete Local on Central Pull Checkbox
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        deleteLocalOnCentralPullCheckBox = new JCheckBox("Delete Local Data on Central Pull (if not in central)");
+        deleteLocalOnCentralPullCheckBox.setOpaque(false);
+        panel.add(deleteLocalOnCentralPullCheckBox, gbc);
+
         // NEW: Central API URL and Auth Token fields
         gbc.gridx = 0;
         gbc.gridy++;
@@ -489,6 +500,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         autoSyncEnabledCheckBox.setSelected(syncConfigManager.isAutoSyncEnabled());
         compressionEnabledCheckBox.setSelected(syncConfigManager.isCompressionEnabled());
         encryptionEnabledCheckBox.setSelected(syncConfigManager.isEncryptionEnabled());
+        deleteLocalOnCentralPullCheckBox.setSelected(syncConfigManager.isDeleteLocalOnCentralPullEnabled()); // NEW: Load the setting
         
         // Load Central API settings
         centralApiUrlInputField.setText(syncConfigManager.getCentralApiUrl());
@@ -502,6 +514,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         syncConfigManager.setAutoSyncEnabled(autoSyncEnabledCheckBox.isSelected());
         syncConfigManager.setCompressionEnabled(compressionEnabledCheckBox.isSelected());
         syncConfigManager.setEncryptionEnabled(encryptionEnabledCheckBox.isSelected());
+        syncConfigManager.setDeleteLocalOnCentralPull(deleteLocalOnCentralPullCheckBox.isSelected()); // NEW: Save the setting
         
         // Save Central API settings
         String oldCentralApiUrl = AppConfig.getProperty(AppConfig.CENTRAL_API_URL_KEY, "");
@@ -1109,7 +1122,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete template '" + selectedTemplate.getTemplateName() + "'?", "Confirm Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm == JOptionPane.YES_OPTION) {
             if (Database.deleteMessageTemplate(selectedTemplate.getId())) { 
-                JOptionPane.showMessageDialog(this, "Message template deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Message template deleted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
                 loadMessageTemplates();
                 clearTemplateForm();
             } else {

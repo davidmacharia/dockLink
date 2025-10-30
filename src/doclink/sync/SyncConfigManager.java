@@ -6,6 +6,7 @@ import doclink.models.Peer;
 import doclink.models.ChangelogEntry; // NEW: Import ChangelogEntry
 import doclink.models.Plan; // NEW: Import Plan
 import doclink.models.User; // NEW: Import User
+import doclink.models.Document; // NEW: Import Document
 
 import javax.swing.*;
 import java.io.IOException;
@@ -19,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors; // NEW: Import Collectors
 
 public class SyncConfigManager {
 
@@ -28,6 +30,7 @@ public class SyncConfigManager {
 
     private SyncRole currentSyncRole;
     private HybridSyncMode currentHybridSyncMode;
+    private boolean deleteLocalOnCentralPull; // NEW: Field for the new setting
     private ScheduledExecutorService scheduler;
     private Consumer<String> logConsumer; // For logging messages to the UI
 
@@ -55,12 +58,14 @@ public class SyncConfigManager {
     public void loadSettings() {
         currentSyncRole = SyncRole.valueOf(AppConfig.getProperty(AppConfig.SYNC_ROLE_KEY, SyncRole.CLIENT.name()));
         currentHybridSyncMode = HybridSyncMode.valueOf(AppConfig.getProperty(AppConfig.HYBRID_SYNC_MODE_KEY, HybridSyncMode.P2P_ONLY.name()));
-        log("Settings loaded. Role: " + currentSyncRole + ", Hybrid Mode: " + currentHybridSyncMode);
+        deleteLocalOnCentralPull = AppConfig.getBooleanProperty(AppConfig.DELETE_LOCAL_ON_CENTRAL_PULL_KEY, false); // NEW: Load the new setting
+        log("Settings loaded. Role: " + currentSyncRole + ", Hybrid Mode: " + currentHybridSyncMode + ", Delete Local on Central Pull: " + deleteLocalOnCentralPull);
     }
 
     public void saveSettings() {
         AppConfig.setProperty(AppConfig.SYNC_ROLE_KEY, currentSyncRole.name());
         AppConfig.setProperty(AppConfig.HYBRID_SYNC_MODE_KEY, currentHybridSyncMode.name());
+        AppConfig.setBooleanProperty(AppConfig.DELETE_LOCAL_ON_CENTRAL_PULL_KEY, deleteLocalOnCentralPull); // NEW: Save the new setting
         log("Settings saved.");
     }
 
@@ -85,6 +90,20 @@ public class SyncConfigManager {
             this.currentHybridSyncMode = mode;
             log("Hybrid sync mode set to: " + mode);
             restartSyncServices();
+        }
+    }
+
+    // NEW: Getter for deleteLocalOnCentralPull
+    public boolean isDeleteLocalOnCentralPullEnabled() {
+        return deleteLocalOnCentralPull;
+    }
+
+    // NEW: Setter for deleteLocalOnCentralPull
+    public void setDeleteLocalOnCentralPull(boolean enabled) {
+        if (this.deleteLocalOnCentralPull != enabled) {
+            this.deleteLocalOnCentralPull = enabled;
+            log("Delete local on central pull set to: " + enabled);
+            saveSettings(); // Save immediately as this is a user preference
         }
     }
 
@@ -247,7 +266,7 @@ public class SyncConfigManager {
                     if (message.equals("DOCLINK_DISCOVERY_REQUEST")) {
                         String response = "DOCLINK_DISCOVERY_RESPONSE:" + InetAddress.getLocalHost().getHostAddress() + ":" + P2P_TCP_PORT;
                         byte[] sendData = response.getBytes();
-                        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, packet.getAddress(), packet.getPort());
+                        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, packet.getAddress(), packet.getPort()); // Corrected port to packet.getPort()
                         udpSocket.send(sendPacket);
                         log("Responded to discovery request from: " + packet.getAddress().getHostAddress());
                     }
@@ -592,7 +611,7 @@ public class SyncConfigManager {
             log("Error connecting to or performing push operations on Central DB: " + e.getMessage());
             // Rollback if connection failed or commit failed
             try {
-                Connection centralConn = Database.getCentralConnection();
+                Connection centralConn = Database.getCentralConnection(); // Re-establish connection for rollback if needed
                 if (centralConn != null && !centralConn.getAutoCommit()) {
                     centralConn.rollback();
                     log("Central DB transaction rolled back due to push error.");
@@ -614,17 +633,69 @@ public class SyncConfigManager {
         log("Initiating Central DB to local SQLite synchronization (Pull)...");
 
         try (Connection centralConn = Database.getCentralConnection()) {
-            // 1. Fetch all users from central DB
+            // 1. Sync Users
             List<User> centralUsers = Database.getAllUsersFromCentralDb(centralConn);
+            List<User> localUsers = Database.getAllUsersLocal(); // Get all local users
             Database.upsertUsersIntoLocalDb(centralUsers);
-            log("Pulled and upserted " + centralUsers.size() + " users from central DB to local SQLite.");
+            log("Pulled and upserted " + centralUsers.size() + " users into local SQLite from central DB.");
 
-            // 2. Fetch all plans from central DB
+            // Identify and delete users from local DB that are no longer in central DB
+            if (deleteLocalOnCentralPull) { // NEW: Check the setting
+                List<Integer> centralUserIds = centralUsers.stream().map(User::getId).collect(Collectors.toList());
+                for (User localUser : localUsers) {
+                    if (!centralUserIds.contains(localUser.getId())) {
+                        Database.deleteUserLocalById(localUser.getId());
+                        log("Deleted local user " + localUser.getId() + " as it no longer exists in central DB.");
+                    }
+                }
+            } else {
+                log("Local deletion of users on central pull is disabled. Skipping local user deletions.");
+            }
+
+            // 2. Sync Plans
             List<Plan> centralPlans = Database.getAllPlansFromCentralDb(centralConn);
+            List<Plan> localPlans = Database.getAllPlansLocal(); // Get all local plans
             Database.upsertPlansIntoLocalDb(centralPlans);
             log("Pulled and upserted " + centralPlans.size() + " plans from central DB to local SQLite.");
 
-            // TODO: Extend this for other tables (documents, billing, logs, meetings, etc.)
+            // Identify and delete plans from local DB that are no longer in central DB
+            if (deleteLocalOnCentralPull) { // NEW: Check the setting
+                List<Integer> centralPlanIds = centralPlans.stream().map(Plan::getId).collect(Collectors.toList());
+                for (Plan localPlan : localPlans) {
+                    if (!centralPlanIds.contains(localPlan.getId())) {
+                        Database.deletePlanAndRelatedDataLocal(localPlan.getId()); // Use the cascading delete for plans
+                        log("Deleted local plan " + localPlan.getId() + " and its related data as it no longer exists in central DB.");
+                    }
+                }
+            } else {
+                log("Local deletion of plans on central pull is disabled. Skipping local plan deletions.");
+            }
+
+            // 3. Sync Documents (NEW)
+            List<Document> centralDocuments = Database.getAllDocumentsFromCentralDb(centralConn);
+            List<Document> localDocuments = Database.getAllDocumentsLocal();
+            Database.upsertDocumentsIntoLocalDb(centralDocuments);
+            log("Pulled and upserted " + centralDocuments.size() + " documents from central DB to local SQLite.");
+
+            // Identify and delete documents from local DB that are no longer in central DB
+            if (deleteLocalOnCentralPull) {
+                List<Integer> centralDocumentIds = centralDocuments.stream().map(Document::getId).collect(Collectors.toList());
+                for (Document localDocument : localDocuments) {
+                    if (!centralDocumentIds.contains(localDocument.getId())) {
+                        Database.deleteDocumentLocalById(localDocument.getId());
+                        log("Deleted local document " + localDocument.getId() + " as it no longer exists in central DB.");
+                    }
+                }
+            } else {
+                log("Local deletion of documents on central pull is disabled. Skipping local document deletions.");
+            }
+
+            // TODO: Extend this for other tables (billing, logs, meetings, etc.)
+            // For each table, you'll need to:
+            // a. Fetch all records from the central DB (e.g., Database.getAllDocumentsFromCentralDb(centralConn))
+            // b. Fetch all records from the local DB (e.g., Database.getAllDocumentsLocal())
+            // c. Upsert the central records into the local DB (e.g., Database.upsertDocumentsIntoLocalDb(centralDocuments))
+            // d. If deleteLocalOnCentralPull is enabled, identify and delete local records that are not in the central records (e.g., Database.deleteDocumentLocalById(localDoc.getId()))
 
             // Update last central pull timestamp
             AppConfig.setProperty(AppConfig.LAST_CENTRAL_PULL_TIMESTAMP_KEY, LocalDateTime.now().toString());

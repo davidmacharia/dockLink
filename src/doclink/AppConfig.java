@@ -22,6 +22,7 @@ public class AppConfig {
     public static final String CENTRAL_API_URL_KEY = "doclink.central.api.url";
     public static final String CENTRAL_API_AUTH_TOKEN_KEY = "doclink.central.api.auth.token";
     public static final String LAST_CENTRAL_PULL_TIMESTAMP_KEY = "doclink.sync.last.central.pull.timestamp"; // NEW: Key for last central pull timestamp
+    public static final String DELETE_LOCAL_ON_CENTRAL_PULL_KEY = "doclink.sync.delete.local.on.central.pull"; // NEW: Key for enabling/disabling local deletion on central pull
 
     // NEW: Communication Manager Keys
     public static final String SMTP_HOST_KEY = "doclink.comm.smtp.host";

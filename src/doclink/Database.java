@@ -39,174 +39,14 @@ public class Database {
     }
 
     public static void initializeDatabase() {
-        String centralDbUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY);
-
         try {
             // Always initialize local SQLite as the active connection
             activeConnection = createConnection(SQLITE_DB_URL);
             currentDatabaseType = DatabaseType.SQLITE;
             System.out.println("Successfully connected to local SQLite database as primary.");
 
-            try (Statement stmt = activeConnection.createStatement()) {
-                // Users Table
-                String userTableSql = "CREATE TABLE IF NOT EXISTS users (" +
-                                   "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                   "name TEXT NOT NULL," +
-                                   "email TEXT UNIQUE NOT NULL," +
-                                   "password TEXT NOT NULL," +
-                                   "role TEXT NOT NULL," +
-                                   "contact TEXT)";
-                stmt.execute(userTableSql);
-
-                if (!columnExists(activeConnection, "users", "contact")) {
-                    stmt.execute("ALTER TABLE users ADD COLUMN contact TEXT");
-                }
-
-                // Plans Table
-                String planTableSql = "CREATE TABLE IF NOT EXISTS plans (" +
-                                   "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                   "applicant_name TEXT NOT NULL," +
-                                   "contact TEXT NOT NULL," +
-                                   "plot_no TEXT NOT NULL," +
-                                   "location TEXT NOT NULL," +
-                                   "date_submitted TEXT NOT NULL," +
-                                   "reference_no TEXT UNIQUE," +
-                                   "status TEXT NOT NULL," +
-                                   "remarks TEXT)";
-                stmt.execute(planTableSql);
-
-                // Documents Table
-                String docTableSql = "CREATE TABLE IF NOT EXISTS documents (" +
-                                  "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                  "plan_id INTEGER NOT NULL," +
-                                  "doc_name TEXT NOT NULL," +
-                                  "file_path TEXT," +
-                                  "is_attached BOOLEAN NOT NULL," +
-                                  "document_type TEXT NOT NULL DEFAULT 'Submitted'," +
-                                  "FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE)";
-                stmt.execute(docTableSql);
-
-                if (!columnExists(activeConnection, "documents", "document_type")) {
-                    stmt.execute("ALTER TABLE documents ADD COLUMN document_type TEXT NOT NULL DEFAULT 'Submitted'");
-                }
-
-                // Billing Table
-                String billingTableSql = "CREATE TABLE IF NOT EXISTS billing (" +
-                                      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                      "plan_id INTEGER NOT NULL," +
-                                      "amount REAL NOT NULL," +
-                                      "receipt_no TEXT UNIQUE," +
-                                      "date_paid TEXT," +
-                                      "FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE)";
-                stmt.execute(billingTableSql);
-
-                // Logs Table
-                String logTableSql = "CREATE TABLE IF NOT EXISTS logs (" +
-                                  "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                  "plan_id INTEGER NOT NULL," +
-                                  "from_role TEXT NOT NULL," +
-                                  "to_role TEXT NOT NULL," +
-                                  "action TEXT NOT NULL," +
-                                  "remarks TEXT," +
-                                  "date TEXT NOT NULL," +
-                                  "FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE)";
-                stmt.execute(logTableSql);
-
-                // Meetings Table
-                String meetingTableSql = "CREATE TABLE IF NOT EXISTS meetings (" +
-                                      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                      "title TEXT NOT NULL," +
-                                      "date TEXT NOT NULL," +
-                                      "time TEXT NOT NULL," +
-                                      "location TEXT NOT NULL," +
-                                      "agenda TEXT," +
-                                      "status TEXT NOT NULL)";
-                stmt.execute(meetingTableSql);
-
-                // Document Checklist Items Table
-                String checklistTableSql = "CREATE TABLE IF NOT EXISTS document_checklist_items (" +
-                                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                        "item_name TEXT UNIQUE NOT NULL," +
-                                        "is_required BOOLEAN NOT NULL DEFAULT 1," +
-                                        "requires_file_upload BOOLEAN NOT NULL DEFAULT 0)";
-                stmt.execute(checklistTableSql);
-
-                if (!columnExists(activeConnection, "document_checklist_items", "requires_file_upload")) {
-                    stmt.execute("ALTER TABLE document_checklist_items ADD COLUMN requires_file_upload BOOLEAN NOT NULL DEFAULT 0");
-                }
-
-                // Peers Table
-                String peersTableSql = "CREATE TABLE IF NOT EXISTS peers (" +
-                                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                    "ip_address TEXT NOT NULL," +
-                                    "port INTEGER NOT NULL," +
-                                    "last_sync_time TEXT," +
-                                    "is_trusted BOOLEAN NOT NULL DEFAULT 0," +
-                                    "status TEXT NOT NULL DEFAULT 'Unknown'," +
-                                    "UNIQUE(ip_address, port))";
-                stmt.execute(peersTableSql);
-
-                // System Updates Table
-                String systemUpdatesTableSql = "CREATE TABLE IF NOT EXISTS system_updates (" +
-                                            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                            "version TEXT," +
-                                            "title TEXT NOT NULL," +
-                                            "message TEXT NOT NULL," +
-                                            "created_at TEXT NOT NULL)";
-                stmt.execute(systemUpdatesTableSql);
-
-                // Message Templates Table
-                String messageTemplatesTableSql = "CREATE TABLE IF NOT EXISTS message_templates (" +
-                                               "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                               "template_name TEXT UNIQUE NOT NULL," +
-                                               "subject TEXT," +
-                                               "body TEXT NOT NULL," +
-                                               "type TEXT NOT NULL)";
-                stmt.execute(messageTemplatesTableSql);
-
-                // Message Logs Table
-                String messageLogsTableSql = "CREATE TABLE IF NOT EXISTS message_logs (" +
-                                          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                          "timestamp TEXT NOT NULL," +
-                                          "recipient TEXT NOT NULL," +
-                                          "message_type TEXT NOT NULL," +
-                                          "subject TEXT," +
-                                          "message TEXT NOT NULL," +
-                                          "status TEXT NOT NULL," +
-                                          "details TEXT)";
-                stmt.execute(messageLogsTableSql);
-
-                // User Preferences Table
-                String userPreferencesTableSql = "CREATE TABLE IF NOT EXISTS user_preferences (" +
-                                              "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                              "user_id INTEGER UNIQUE NOT NULL," +
-                                              "email_notifications_enabled BOOLEAN NOT NULL DEFAULT 1," +
-                                              "sms_notifications_enabled BOOLEAN NOT NULL DEFAULT 1," +
-                                              "last_seen_update_id INTEGER NOT NULL DEFAULT 0," +
-                                              "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)";
-                stmt.execute(userPreferencesTableSql);
-
-                // Add new column if it doesn't exist
-                if (!columnExists(activeConnection, "user_preferences", "last_seen_update_id")) {
-                    stmt.execute("ALTER TABLE user_preferences ADD COLUMN last_seen_update_id INTEGER NOT NULL DEFAULT 0");
-                }
-
-                // NEW: Changelog Table for local-to-central sync
-                String changelogTableSql = "CREATE TABLE IF NOT EXISTS changelog (" +
-                                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                        "table_name TEXT NOT NULL," +
-                                        "record_id INTEGER NOT NULL," +
-                                        "change_type TEXT NOT NULL," +
-                                        "column_name TEXT," +
-                                        "old_value TEXT," +
-                                        "new_value TEXT," +
-                                        "timestamp TEXT NOT NULL," +
-                                        "is_synced BOOLEAN NOT NULL DEFAULT 0)";
-                stmt.execute(changelogTableSql);
-
-
-                System.out.println("Database schema initialized successfully for local SQLite.");
-            }
+            createTables(activeConnection); // Call the new method to create tables
+            System.out.println("Database schema initialized successfully for local SQLite.");
 
         } catch (SQLException e) {
             System.err.println("Error initializing database: " + e.getMessage());
@@ -215,6 +55,245 @@ public class Database {
         }
         addDemoChecklistItems();
         addDemoMessageTemplates();
+    }
+
+    /**
+     * Creates all necessary tables in the provided database connection if they do not already exist.
+     * This method is used for both local SQLite and central databases.
+     * @param conn The database connection to apply schema to.
+     * @throws SQLException if a database access error occurs.
+     */
+    private static void createTables(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            boolean isMySQL = conn.getMetaData().getDatabaseProductName().equals("MySQL");
+
+            // Users Table
+            String userTableSql = "CREATE TABLE IF NOT EXISTS users (" +
+                               "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                               "name TEXT NOT NULL," +
+                               "email TEXT UNIQUE NOT NULL," +
+                               "password TEXT NOT NULL," +
+                               "role TEXT NOT NULL," +
+                               "contact TEXT)";
+            if (isMySQL) {
+                userTableSql = userTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                userTableSql = userTableSql.replace("email TEXT UNIQUE NOT NULL", "email VARCHAR(191) UNIQUE NOT NULL");
+            }
+            stmt.execute(userTableSql);
+
+            if (!columnExists(conn, "users", "contact")) {
+                stmt.execute("ALTER TABLE users ADD COLUMN contact TEXT");
+            }
+
+            // Plans Table
+            String planTableSql = "CREATE TABLE IF NOT EXISTS plans (" +
+                               "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                               "applicant_name TEXT NOT NULL," +
+                               "contact TEXT NOT NULL," +
+                               "plot_no TEXT NOT NULL," +
+                               "location TEXT NOT NULL," +
+                               "date_submitted TEXT NOT NULL," +
+                               "reference_no TEXT UNIQUE," +
+                               "status TEXT NOT NULL," +
+                               "remarks TEXT)";
+            if (isMySQL) {
+                planTableSql = planTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                planTableSql = planTableSql.replace("reference_no TEXT UNIQUE", "reference_no VARCHAR(191) UNIQUE");
+            }
+            stmt.execute(planTableSql);
+
+            // Documents Table
+            String docTableSql = "CREATE TABLE IF NOT EXISTS documents (" +
+                              "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                              "plan_id INTEGER NOT NULL," +
+                              "doc_name TEXT NOT NULL," +
+                              "file_path TEXT," +
+                              "is_attached BOOLEAN NOT NULL," +
+                              "document_type TEXT NOT NULL DEFAULT 'Submitted'," +
+                              "FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE)";
+            if (isMySQL) {
+                docTableSql = docTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                // Remove DEFAULT for TEXT columns in MySQL
+                docTableSql = docTableSql.replace("document_type TEXT NOT NULL DEFAULT 'Submitted'", "document_type TEXT NOT NULL");
+            }
+            stmt.execute(docTableSql);
+
+            if (!columnExists(conn, "documents", "document_type")) {
+                String alterDocTypeSql = "ALTER TABLE documents ADD COLUMN document_type TEXT NOT NULL DEFAULT 'Submitted'";
+                if (isMySQL) {
+                    alterDocTypeSql = "ALTER TABLE documents ADD COLUMN document_type TEXT NOT NULL"; // Remove DEFAULT for MySQL
+                }
+                stmt.execute(alterDocTypeSql);
+            }
+
+            // Billing Table
+            String billingTableSql = "CREATE TABLE IF NOT EXISTS billing (" +
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                  "plan_id INTEGER NOT NULL," +
+                                  "amount REAL NOT NULL," +
+                                  "receipt_no TEXT UNIQUE," +
+                                  "date_paid TEXT," +
+                                  "FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE)";
+            if (isMySQL) {
+                billingTableSql = billingTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                billingTableSql = billingTableSql.replace("receipt_no TEXT UNIQUE", "receipt_no VARCHAR(191) UNIQUE");
+            }
+            stmt.execute(billingTableSql);
+
+            // Logs Table
+            String logTableSql = "CREATE TABLE IF NOT EXISTS logs (" +
+                               "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                               "plan_id INTEGER NOT NULL," +
+                               "from_role TEXT NOT NULL," +
+                               "to_role TEXT NOT NULL," +
+                               "action TEXT NOT NULL," +
+                               "remarks TEXT," +
+                               "date TEXT NOT NULL," +
+                               "FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE)";
+            if (isMySQL) {
+                logTableSql = logTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+            }
+            stmt.execute(logTableSql);
+
+            // Meetings Table
+            String meetingTableSql = "CREATE TABLE IF NOT EXISTS meetings (" +
+                                  "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                  "title TEXT NOT NULL," +
+                                  "date TEXT NOT NULL," +
+                                  "time TEXT NOT NULL," +
+                                  "location TEXT NOT NULL," +
+                                  "agenda TEXT," +
+                                  "status TEXT NOT NULL)";
+            if (isMySQL) {
+                meetingTableSql = meetingTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+            }
+            stmt.execute(meetingTableSql);
+
+            // Document Checklist Items Table
+            String checklistTableSql = "CREATE TABLE IF NOT EXISTS document_checklist_items (" +
+                                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                    "item_name TEXT UNIQUE NOT NULL," +
+                                    "is_required BOOLEAN NOT NULL DEFAULT 1," +
+                                    "requires_file_upload BOOLEAN NOT NULL DEFAULT 0)";
+            if (isMySQL) {
+                checklistTableSql = checklistTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                checklistTableSql = checklistTableSql.replace("item_name TEXT UNIQUE NOT NULL", "item_name VARCHAR(191) UNIQUE NOT NULL");
+                // Remove DEFAULT for BOOLEAN columns in MySQL if they are TEXT/TINYINT(1)
+                checklistTableSql = checklistTableSql.replace("is_required BOOLEAN NOT NULL DEFAULT 1", "is_required BOOLEAN NOT NULL");
+                checklistTableSql = checklistTableSql.replace("requires_file_upload BOOLEAN NOT NULL DEFAULT 0", "requires_file_upload BOOLEAN NOT NULL");
+            }
+            stmt.execute(checklistTableSql);
+
+            if (!columnExists(conn, "document_checklist_items", "requires_file_upload")) {
+                String alterRequiresFileUploadSql = "ALTER TABLE document_checklist_items ADD COLUMN requires_file_upload BOOLEAN NOT NULL DEFAULT 0";
+                if (isMySQL) {
+                    alterRequiresFileUploadSql = "ALTER TABLE document_checklist_items ADD COLUMN requires_file_upload BOOLEAN NOT NULL"; // Remove DEFAULT for MySQL
+                }
+                stmt.execute(alterRequiresFileUploadSql);
+            }
+
+            // Peers Table
+            String peersTableSql = "CREATE TABLE IF NOT EXISTS peers (" +
+                                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                "ip_address TEXT NOT NULL," +
+                                "port INTEGER NOT NULL," +
+                                "last_sync_time TEXT," +
+                                "is_trusted BOOLEAN NOT NULL DEFAULT 0," +
+                                "status TEXT NOT NULL DEFAULT 'Unknown'," +
+                                "UNIQUE(ip_address, port))";
+            if (isMySQL) {
+                peersTableSql = peersTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                peersTableSql = peersTableSql.replace("ip_address TEXT NOT NULL", "ip_address VARCHAR(191) NOT NULL");
+                // Remove DEFAULT for BOOLEAN columns in MySQL
+                peersTableSql = peersTableSql.replace("is_trusted BOOLEAN NOT NULL DEFAULT 0", "is_trusted BOOLEAN NOT NULL");
+                peersTableSql = peersTableSql.replace("status TEXT NOT NULL DEFAULT 'Unknown'", "status TEXT NOT NULL");
+            }
+            stmt.execute(peersTableSql);
+
+            // System Updates Table
+            String systemUpdatesTableSql = "CREATE TABLE IF NOT EXISTS system_updates (" +
+                                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                        "version TEXT," +
+                                        "title TEXT NOT NULL," +
+                                        "message TEXT NOT NULL," +
+                                        "created_at TEXT NOT NULL)";
+            if (isMySQL) {
+                systemUpdatesTableSql = systemUpdatesTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+            }
+            stmt.execute(systemUpdatesTableSql);
+
+            // Message Templates Table
+            String messageTemplatesTableSql = "CREATE TABLE IF NOT EXISTS message_templates (" +
+                                           "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                           "template_name TEXT UNIQUE NOT NULL," +
+                                           "subject TEXT," +
+                                           "body TEXT NOT NULL," +
+                                           "type TEXT NOT NULL)";
+            if (isMySQL) {
+                messageTemplatesTableSql = messageTemplatesTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                messageTemplatesTableSql = messageTemplatesTableSql.replace("template_name TEXT UNIQUE NOT NULL", "template_name VARCHAR(191) UNIQUE NOT NULL");
+            }
+            stmt.execute(messageTemplatesTableSql);
+
+            // Message Logs Table
+            String messageLogsTableSql = "CREATE TABLE IF NOT EXISTS message_logs (" +
+                                      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                      "timestamp TEXT NOT NULL," +
+                                      "recipient TEXT NOT NULL," +
+                                      "message_type TEXT NOT NULL," +
+                                      "subject TEXT," +
+                                      "message TEXT NOT NULL," +
+                                      "status TEXT NOT NULL," +
+                                      "details TEXT)";
+            if (isMySQL) {
+                messageLogsTableSql = messageLogsTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+            }
+            stmt.execute(messageLogsTableSql);
+
+            // User Preferences Table
+            String userPreferencesTableSql = "CREATE TABLE IF NOT EXISTS user_preferences (" +
+                                          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                          "user_id INTEGER UNIQUE NOT NULL," +
+                                          "email_notifications_enabled BOOLEAN NOT NULL DEFAULT 1," +
+                                          "sms_notifications_enabled BOOLEAN NOT NULL DEFAULT 1," +
+                                          "last_seen_update_id INTEGER NOT NULL DEFAULT 0," +
+                                          "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)";
+            if (isMySQL) {
+                userPreferencesTableSql = userPreferencesTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                // Remove DEFAULT for BOOLEAN columns in MySQL
+                userPreferencesTableSql = userPreferencesTableSql.replace("email_notifications_enabled BOOLEAN NOT NULL DEFAULT 1", "email_notifications_enabled BOOLEAN NOT NULL");
+                userPreferencesTableSql = userPreferencesTableSql.replace("sms_notifications_enabled BOOLEAN NOT NULL DEFAULT 1", "sms_notifications_enabled BOOLEAN NOT NULL");
+                userPreferencesTableSql = userPreferencesTableSql.replace("last_seen_update_id INTEGER NOT NULL DEFAULT 0", "last_seen_update_id INTEGER NOT NULL");
+            }
+            stmt.execute(userPreferencesTableSql);
+
+            // Add new column if it doesn't exist
+            if (!columnExists(conn, "user_preferences", "last_seen_update_id")) {
+                String alterLastSeenUpdateSql = "ALTER TABLE user_preferences ADD COLUMN last_seen_update_id INTEGER NOT NULL DEFAULT 0";
+                if (isMySQL) {
+                    alterLastSeenUpdateSql = "ALTER TABLE user_preferences ADD COLUMN last_seen_update_id INTEGER NOT NULL"; // Remove DEFAULT for MySQL
+                }
+                stmt.execute(alterLastSeenUpdateSql);
+            }
+
+            // NEW: Changelog Table for local-to-central sync
+            String changelogTableSql = "CREATE TABLE IF NOT EXISTS changelog (" +
+                                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                                    "table_name TEXT NOT NULL," +
+                                    "record_id INTEGER NOT NULL," +
+                                    "change_type TEXT NOT NULL," +
+                                    "column_name TEXT," +
+                                    "old_value TEXT," +
+                                    "new_value TEXT," +
+                                    "timestamp TEXT NOT NULL," +
+                                    "is_synced BOOLEAN NOT NULL DEFAULT 0)";
+            if (isMySQL) {
+                changelogTableSql = changelogTableSql.replace("AUTOINCREMENT", "AUTO_INCREMENT");
+                // Remove DEFAULT for BOOLEAN columns in MySQL
+                changelogTableSql = changelogTableSql.replace("is_synced BOOLEAN NOT NULL DEFAULT 0", "is_synced BOOLEAN NOT NULL");
+            }
+            stmt.execute(changelogTableSql);
+        }
     }
 
     private static boolean columnExists(Connection conn, String tableName, String columnName) throws SQLException {
@@ -243,7 +322,9 @@ public class Database {
             centralDbType = DatabaseType.MYSQL;
         }
         System.out.println("Attempting to get central connection to: " + centralDbUrl + " (Type: " + centralDbType + ")");
-        return createConnection(centralDbUrl);
+        Connection centralConn = createConnection(centralDbUrl);
+        createTables(centralConn); // Ensure tables exist in the central DB
+        return centralConn;
     }
 
     public static DatabaseType getCurrentDatabaseType() {
@@ -487,7 +568,7 @@ public class Database {
             System.out.println("Plan " + planId + " status updated to " + newStatus);
 
             // NEW: Log plan update if using SQLite and values changed
-            if (currentDatabaseType == DatabaseType.SQLITE && rowsAffected > 0) {
+            if (currentDatabaseType == Database.DatabaseType.SQLITE && rowsAffected > 0) {
                 if (oldStatus != null && !oldStatus.equals(newStatus)) {
                     addChangelogEntry(new ChangelogEntry("plans", planId, "UPDATE", "status", oldStatus, newStatus));
                 }
@@ -2130,7 +2211,36 @@ public class Database {
                 }
                 throw e;
             }
-        } else if ("DELETE".equals(changeType)) {
+        } else if ("UPDATE".equals(changeType)) {
+            // For documents, updates are less common, but if a file_path or is_attached changes, we should reflect it.
+            // Fetch the full document from the local DB
+            String selectSql = "SELECT id, plan_id, doc_name, file_path, is_attached, document_type FROM documents WHERE id = ?";
+            Document localDoc = null;
+            try (PreparedStatement pstmt = getActiveConnection().prepareStatement(selectSql)) {
+                pstmt.setInt(1, recordId);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    localDoc = new Document(rs.getInt("id"), rs.getInt("plan_id"), rs.getString("doc_name"),
+                                            rs.getString("file_path"), rs.getBoolean("is_attached"), rs.getString("document_type"));
+                }
+            }
+            if (localDoc == null) { System.err.println("Changelog: Local document " + recordId + " not found for UPDATE. Skipping."); return false; }
+
+            String updateSql = "UPDATE documents SET plan_id = ?, doc_name = ?, file_path = ?, is_attached = ?, document_type = ? WHERE id = ?";
+            try (PreparedStatement pstmt = targetConn.prepareStatement(updateSql)) {
+                pstmt.setInt(1, localDoc.getPlanId());
+                pstmt.setString(2, localDoc.getDocName());
+                pstmt.setString(3, localDoc.getFilePath());
+                pstmt.setBoolean(4, localDoc.isAttached());
+                pstmt.setString(5, localDoc.getDocumentType());
+                pstmt.setInt(6, localDoc.getId());
+                int rows = pstmt.executeUpdate();
+                if (rows > 0) { System.out.println("Changelog: Updated full document " + localDoc.getId() + " in central DB."); return true; }
+                System.out.println("Changelog: Document " + localDoc.getId() + " not found in central DB for update. Attempting INSERT instead.");
+                return syncDocument(new ChangelogEntry("documents", localDoc.getId(), "INSERT"), targetConn); // Re-use INSERT logic
+            }
+        }
+        else if ("DELETE".equals(changeType)) {
             String deleteSql = "DELETE FROM documents WHERE id = ?";
             try (PreparedStatement pstmt = targetConn.prepareStatement(deleteSql)) {
                 pstmt.setInt(1, recordId);
@@ -2835,6 +2945,45 @@ public class Database {
     }
 
     /**
+     * Retrieves all users from the local SQLite database.
+     * @return A list of User objects from the local database.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static List<User> getAllUsersLocal() throws SQLException {
+        List<User> users = new ArrayList<>();
+        String sql = "SELECT id, name, email, contact, role FROM users ORDER BY id";
+        try (Statement stmt = getActiveConnection().createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                users.add(new User(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("email"),
+                    rs.getString("contact"),
+                    rs.getString("role")
+                ));
+            }
+        }
+        return users;
+    }
+
+    /**
+     * Deletes a user from the local SQLite database without creating a changelog entry.
+     * This is used for central-to-local synchronization deletions.
+     * @param userId The ID of the user to delete.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static void deleteUserLocalById(int userId) throws SQLException {
+        String sql = "DELETE FROM users WHERE id = ?";
+        try (PreparedStatement pstmt = getActiveConnection().prepareStatement(sql)) {
+            pstmt.setInt(1, userId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("Deleted local user " + userId + " during central-to-local sync.");
+            }
+        }
+    }
+
+    /**
      * Upserts a list of users into the local SQLite database.
      * @param users The list of User objects to upsert.
      * @throws SQLException if a database access error occurs.
@@ -2892,6 +3041,76 @@ public class Database {
     }
 
     /**
+     * Retrieves all plans from the local SQLite database.
+     * @return A list of Plan objects from the local database.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static List<Plan> getAllPlansLocal() throws SQLException {
+        List<Plan> plans = new ArrayList<>();
+        String sql = "SELECT id, applicant_name, contact, plot_no, location, date_submitted, reference_no, status, remarks FROM plans ORDER BY id";
+        try (Statement stmt = getActiveConnection().createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                plans.add(new Plan(
+                    rs.getInt("id"),
+                    rs.getString("applicant_name"),
+                    rs.getString("contact"),
+                    rs.getString("plot_no"),
+                    rs.getString("location"),
+                    rs.getObject("date_submitted", LocalDate.class),
+                    rs.getString("reference_no"),
+                    rs.getString("status"),
+                    rs.getString("remarks")
+                ));
+            }
+        }
+        return plans;
+    }
+
+    /**
+     * Deletes a plan and its related data from the local SQLite database without creating a changelog entry.
+     * This is used for central-to-local synchronization deletions.
+     * @param planId The ID of the plan to delete.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static void deletePlanAndRelatedDataLocal(int planId) throws SQLException {
+        Connection localConn = getActiveConnection();
+        localConn.setAutoCommit(false); // Start transaction for local DB
+
+        String deleteDocumentsSql = "DELETE FROM documents WHERE plan_id = ?";
+        String deleteBillingSql = "DELETE FROM billing WHERE plan_id = ?";
+        String deleteLogsSql = "DELETE FROM logs WHERE plan_id = ?";
+        String deletePlanSql = "DELETE FROM plans WHERE id = ?";
+
+        try (PreparedStatement pstmtDocs = localConn.prepareStatement(deleteDocumentsSql);
+             PreparedStatement pstmtBilling = localConn.prepareStatement(deleteBillingSql);
+             PreparedStatement pstmtLogs = localConn.prepareStatement(deleteLogsSql);
+             PreparedStatement pstmtPlan = localConn.prepareStatement(deletePlanSql)) {
+
+            pstmtDocs.setInt(1, planId);
+            pstmtDocs.executeUpdate();
+
+            pstmtBilling.setInt(1, planId);
+            pstmtBilling.executeUpdate();
+
+            pstmtLogs.setInt(1, planId);
+            pstmtLogs.executeUpdate();
+
+            pstmtPlan.setInt(1, planId);
+            int rowsAffected = pstmtPlan.executeUpdate();
+
+            localConn.commit();
+            if (rowsAffected > 0) {
+                System.out.println("Deleted local plan " + planId + " and its related data during central-to-local sync.");
+            }
+        } catch (SQLException e) {
+            localConn.rollback();
+            throw e;
+        } finally {
+            localConn.setAutoCommit(true);
+        }
+    }
+
+    /**
      * Upserts a list of plans into the local SQLite database.
      * @param plans The list of Plan objects to upsert.
      * @throws SQLException if a database access error occurs.
@@ -2916,6 +3135,100 @@ public class Database {
             }
             localConn.commit();
             System.out.println("Upserted " + plans.size() + " plans into local SQLite from central DB.");
+        } catch (SQLException e) {
+            localConn.rollback();
+            throw e;
+        } finally {
+            localConn.setAutoCommit(true);
+        }
+    }
+
+    /**
+     * Fetches all documents from the central database.
+     * @param centralConn The connection to the central database.
+     * @return A list of Document objects from the central database.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static List<Document> getAllDocumentsFromCentralDb(Connection centralConn) throws SQLException {
+        List<Document> documents = new ArrayList<>();
+        String sql = "SELECT id, plan_id, doc_name, file_path, is_attached, document_type FROM documents ORDER BY id";
+        try (Statement stmt = centralConn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                documents.add(new Document(
+                    rs.getInt("id"),
+                    rs.getInt("plan_id"),
+                    rs.getString("doc_name"),
+                    rs.getString("file_path"),
+                    rs.getBoolean("is_attached"),
+                    rs.getString("document_type")
+                ));
+            }
+        }
+        return documents;
+    }
+
+    /**
+     * Retrieves all documents from the local SQLite database.
+     * @return A list of Document objects from the local database.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static List<Document> getAllDocumentsLocal() throws SQLException {
+        List<Document> documents = new ArrayList<>();
+        String sql = "SELECT id, plan_id, doc_name, file_path, is_attached, document_type FROM documents ORDER BY id";
+        try (Statement stmt = getActiveConnection().createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                documents.add(new Document(
+                    rs.getInt("id"),
+                    rs.getInt("plan_id"),
+                    rs.getString("doc_name"),
+                    rs.getString("file_path"),
+                    rs.getBoolean("is_attached"),
+                    rs.getString("document_type")
+                ));
+            }
+        }
+        return documents;
+    }
+
+    /**
+     * Deletes a document from the local SQLite database without creating a changelog entry.
+     * This is used for central-to-local synchronization deletions.
+     * @param documentId The ID of the document to delete.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static void deleteDocumentLocalById(int documentId) throws SQLException {
+        String sql = "DELETE FROM documents WHERE id = ?";
+        try (PreparedStatement pstmt = getActiveConnection().prepareStatement(sql)) {
+            pstmt.setInt(1, documentId);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("Deleted local document " + documentId + " during central-to-local sync.");
+            }
+        }
+    }
+
+    /**
+     * Upserts a list of documents into the local SQLite database.
+     * @param documents The list of Document objects to upsert.
+     * @throws SQLException if a database access error occurs.
+     */
+    public static void upsertDocumentsIntoLocalDb(List<Document> documents) throws SQLException {
+        Connection localConn = getActiveConnection();
+        localConn.setAutoCommit(false); // Start transaction for local DB
+        String upsertSql = "INSERT INTO documents (id, plan_id, doc_name, file_path, is_attached, document_type) VALUES (?, ?, ?, ?, ?, ?) " +
+                           "ON CONFLICT(id) DO UPDATE SET plan_id = EXCLUDED.plan_id, doc_name = EXCLUDED.doc_name, file_path = EXCLUDED.file_path, is_attached = EXCLUDED.is_attached, document_type = EXCLUDED.document_type";
+        try (PreparedStatement pstmt = localConn.prepareStatement(upsertSql)) {
+            for (Document doc : documents) {
+                pstmt.setInt(1, doc.getId());
+                pstmt.setInt(2, doc.getPlanId());
+                pstmt.setString(3, doc.getDocName());
+                pstmt.setString(4, doc.getFilePath());
+                pstmt.setBoolean(5, doc.isAttached());
+                pstmt.setString(6, doc.getDocumentType());
+                pstmt.executeUpdate();
+            }
+            localConn.commit();
+            System.out.println("Upserted " + documents.size() + " documents into local SQLite from central DB.");
         } catch (SQLException e) {
             localConn.rollback();
             throw e;
