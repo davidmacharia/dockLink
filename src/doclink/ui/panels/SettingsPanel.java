@@ -46,16 +46,11 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
     }
 
     private void createFormComponents() {
-        // Main container panel for side-by-side layout
-        JPanel mainContentContainer = new JPanel(new GridBagLayout());
-        mainContentContainer.setOpaque(false); // Inherit background from parent
+        // Main container panel for vertical stacking
+        JPanel mainContentContainer = new JPanel(); // Changed to use BoxLayout
+        mainContentContainer.setLayout(new BoxLayout(mainContentContainer, BoxLayout.Y_AXIS)); // Set BoxLayout
+        mainContentContainer.setOpaque(false);
         mainContentContainer.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-
-        GridBagConstraints mainGbc = new GridBagConstraints();
-        mainGbc.insets = new Insets(10, 10, 10, 10); // Padding between the two main sections
-        mainGbc.fill = GridBagConstraints.BOTH;
-        mainGbc.weightx = 0.5; // Each section takes half the width
-        mainGbc.weighty = 1.0; // Each section expands vertically
 
         // --- Personal Information Panel ---
         JPanel profilePanel = new JPanel(new GridBagLayout());
@@ -118,6 +113,13 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         updateProfileButton.addActionListener(e -> updateProfileDetails());
         profilePanel.add(updateProfileButton, gbcProfile);
 
+        // Add vertical glue to push content to top
+        gbcProfile.gridx = 0;
+        gbcProfile.gridy = rowProfile + 1; // Next row
+        gbcProfile.weighty = 1.0; // Make this row expand vertically
+        profilePanel.add(Box.createVerticalGlue(), gbcProfile); // Add glue here
+
+
         // --- Change Password Panel ---
         JPanel passwordPanel = new JPanel(new GridBagLayout());
         passwordPanel.setBackground(Color.WHITE);
@@ -177,16 +179,7 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         gbcPassword.weighty = 1.0;
         passwordPanel.add(Box.createVerticalGlue(), gbcPassword);
 
-        // Add the two sub-panels to the main content container
-        mainGbc.gridx = 0;
-        mainGbc.gridy = 0;
-        mainContentContainer.add(profilePanel, mainGbc);
-
-        mainGbc.gridx = 1;
-        mainGbc.gridy = 0;
-        mainContentContainer.add(passwordPanel, mainGbc);
-
-        // --- NEW: Notification Preferences Panel (below profile panel) ---
+        // --- NEW: Notification Preferences Panel (below password panel) ---
         JPanel notificationPanel = new JPanel(new GridBagLayout());
         notificationPanel.setBackground(Color.WHITE);
         notificationPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
@@ -231,11 +224,12 @@ public class SettingsPanel extends JPanel implements Dashboard.Refreshable {
         gbcNotif.weighty = 1.0;
         notificationPanel.add(Box.createVerticalGlue(), gbcNotif);
 
-        // Add the notification panel below the profile panel
-        mainGbc.gridx = 0;
-        mainGbc.gridy = 1; // Second row
-        mainGbc.gridwidth = 1; // Only one column wide
-        mainContentContainer.add(notificationPanel, mainGbc);
+        // Add the panels to the main content container in desired order
+        mainContentContainer.add(profilePanel);
+        mainContentContainer.add(Box.createVerticalStrut(20)); // Add some spacing
+        mainContentContainer.add(passwordPanel);
+        mainContentContainer.add(Box.createVerticalStrut(20)); // Add some spacing
+        mainContentContainer.add(notificationPanel);
 
         // Add the main content container to this SettingsPanel, centered
         GridBagConstraints panelGbc = new GridBagConstraints();

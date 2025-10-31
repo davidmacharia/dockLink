@@ -1,16 +1,17 @@
 package doclink.ui.panels.committee;
 
-import doclink.Database; // Added import
+import doclink.Database;
 import doclink.models.Log;
 import doclink.models.Plan;
 import doclink.models.User;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
+import doclink.communication.CommunicationManager; // NEW: Import CommunicationManager
 
 import javax.swing.*;
-import javax.swing.event.ListSelectionEvent; // Added import
-import javax.swing.event.ListSelectionListener; // Added import
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -30,12 +31,14 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
     private JButton approveToDirectorButton, rejectToPlanningButton, deferToPlanningButton;
 
     private Plan selectedPlan;
+    private CommunicationManager communicationManager; // NEW: Instance of CommunicationManager
     private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
 
     public CommitteeReviewPanel(User user, Dashboard parentDashboard, DashboardCardsPanel cardsPanel) {
         this.currentUser = user;
         this.parentDashboard = parentDashboard;
         this.cardsPanel = cardsPanel;
+        this.communicationManager = new CommunicationManager(message -> System.out.println("[CommitteeReviewPanel] " + message)); // NEW: Initialize CommunicationManager
         setLayout(new BorderLayout());
         setBackground(new Color(245, 247, 250)); // Reverted to light grey
 
@@ -222,6 +225,10 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Director", "Approved by Committee", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan approved and forwarded to Director.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Director about new plan for review
+        communicationManager.notifyByRole("Director", "Director_NewPlanForReview_Email", communicationManager.createPlanUserReplacements(selectedPlan, null)); // Assuming a template exists
+
         clearDetails();
         refreshData();
     }
@@ -246,6 +253,12 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Rejected by Committee", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan rejected and returned to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Planning about rejected plan
+        List<String[]> replacements = communicationManager.createPlanUserReplacements(selectedPlan, null);
+        replacements.add(new String[]{"fromRole", currentUser.getRole()}); // Add the role that rejected it
+        communicationManager.notifyByRole("Planning", "Planning_PlanRejected_Email", replacements);
+
         clearDetails();
         refreshData();
     }
@@ -270,6 +283,12 @@ public class CommitteeReviewPanel extends JPanel implements Dashboard.Refreshabl
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Deferred by Committee", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan deferred and returned to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Planning about deferred plan
+        List<String[]> replacements = communicationManager.createPlanUserReplacements(selectedPlan, null);
+        replacements.add(new String[]{"fromRole", currentUser.getRole()}); // Add the role that deferred it
+        communicationManager.notifyByRole("Planning", "Planning_PlanDeferred_Email", replacements);
+
         clearDetails();
         refreshData();
     }

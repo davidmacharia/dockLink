@@ -1,17 +1,19 @@
 package doclink.ui;
 
 import doclink.models.User;
+import doclink.sync.SyncConfigManager; // NEW: Import SyncConfigManager
+import doclink.communication.CommunicationManager; // NEW: Import CommunicationManager
 import doclink.ui.panels.admin.AdminDashboardPanel;
 import doclink.ui.panels.admin.AdminRejectedPlansPanel;
 import doclink.ui.panels.admin.AdminUserManagementPanel;
 import doclink.ui.panels.client.ClientDashboardPanel;
 import doclink.ui.panels.client.ClientNewPlanPanel;
-import doclink.ui.panels.committee.CommitteeMeetingsPanel; // NEW: Import CommitteeMeetingsPanel
+import doclink.ui.panels.committee.CommitteeMeetingsPanel; 
 import doclink.ui.panels.committee.CommitteeReviewPanel;
 import doclink.ui.panels.director.DirectorAllPlansPanel;
 import doclink.ui.panels.director.DirectorReviewPanel;
 import doclink.ui.panels.director.DirectorReportsPanel;
-import doclink.ui.panels.planning.PlanningChecklistManagementPanel; // NEW: Import PlanningChecklistManagementPanel
+import doclink.ui.panels.planning.PlanningChecklistManagementPanel; 
 import doclink.ui.panels.planning.PlanningFilesPanel;
 import doclink.ui.panels.planning.PlanningReviewPanel;
 import doclink.ui.panels.planning.PlanningReportsPanel;
@@ -19,7 +21,10 @@ import doclink.ui.panels.reception.ReceptionAllPlansPanel;
 import doclink.ui.panels.reception.ReceptionSubmissionPanel;
 import doclink.ui.panels.structural.StructuralReviewPanel;
 import doclink.ui.panels.SettingsPanel;
-import doclink.ui.panels.developer.DeveloperPanel; // NEW: Import DeveloperPanel
+import doclink.ui.panels.developer.DeveloperPanel; 
+import doclink.ui.panels.common.LiveSyncMonitorPanel; // NEW: Import LiveSyncMonitorPanel
+import doclink.ui.panels.common.CommunicationSettingsPanel; // NEW: Import CommunicationSettingsPanel
+import doclink.ui.panels.common.CentralDbConfigPanel; // NEW: Import CentralDbConfigPanel
 
 import javax.swing.*;
 import java.awt.*;
@@ -29,6 +34,7 @@ import java.awt.image.BufferedImage;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer; // NEW: Import Consumer for logging
 
 public class Dashboard extends JFrame {
     private User currentUser;
@@ -36,6 +42,10 @@ public class Dashboard extends JFrame {
     private CardLayout cardLayout;
     private DashboardCardsPanel cardsPanel; // Centralized cards panel
     private HeaderPanel headerPanel; // New Header Panel
+
+    // Managers for common panels
+    private SyncConfigManager syncConfigManager; // NEW: SyncConfigManager instance
+    private CommunicationManager communicationManager; // NEW: CommunicationManager instance
 
     // Colors
     private static final Color DARK_NAVY = new Color(26, 35, 126);
@@ -62,6 +72,14 @@ public class Dashboard extends JFrame {
         setExtendedState(JFrame.MAXIMIZED_BOTH);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+
+        // NEW: Initialize managers
+        // For logging from these managers, we can use a simple System.out.println or a more sophisticated UI logger.
+        // For now, we'll pass a lambda that prints to console.
+        Consumer<String> consoleLogger = message -> System.out.println("[Dashboard Manager Log] " + message);
+        this.syncConfigManager = new SyncConfigManager(consoleLogger);
+        this.communicationManager = new CommunicationManager(consoleLogger);
+
 
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBackground(LIGHT_GREY_BG);
@@ -137,11 +155,11 @@ public class Dashboard extends JFrame {
                 addSidebarButton(sidebar, "Plan Review", "PlanningReviewPanel");
                 addSidebarButton(sidebar, "Files", "PlanningFilesPanel");
                 addSidebarButton(sidebar, "Reports", "PlanningReportsPanel");
-                addSidebarButton(sidebar, "Checklist Management", "PlanningChecklistManagementPanel"); // NEW: Added Checklist Management button
+                addSidebarButton(sidebar, "Checklist Management", "PlanningChecklistManagementPanel"); 
                 break;
             case "Committee":
                 addSidebarButton(sidebar, "Plan Review", "CommitteeReviewPanel");
-                addSidebarButton(sidebar, "Meetings", "CommitteeMeetingsPanel"); // NEW: Added Meetings button
+                addSidebarButton(sidebar, "Meetings", "CommitteeMeetingsPanel"); 
                 break;
             case "Director":
                 addSidebarButton(sidebar, "Plan Review", "DirectorReviewPanel");
@@ -160,6 +178,9 @@ public class Dashboard extends JFrame {
                 addSidebarButton(sidebar, "Dashboard", "AdminDashboardPanel");
                 addSidebarButton(sidebar, "User Management", "AdminUserManagementPanel");
                 addSidebarButton(sidebar, "Rejected Plans", "AdminRejectedPlansPanel");
+                addSidebarButton(sidebar, "Live Sync Monitor", "LiveSyncMonitorPanel"); // NEW: Admin access
+                addSidebarButton(sidebar, "Communication Settings", "CommunicationSettingsPanel"); // NEW: Admin access
+                addSidebarButton(sidebar, "Central DB Config", "CentralDbConfigPanel"); // NEW: Admin access
                 break;
             case "Developer": // NEW: Developer Role
                 System.out.println("createSidebar: Adding Developer Tools button for role: '" + processedRole + "'"); // Debug print
@@ -241,18 +262,18 @@ public class Dashboard extends JFrame {
         functionalPanels.put("PlanningReportsPanel", planningReportsPanel);
         refreshablePanels.put("PlanningReportsPanel", planningReportsPanel);
 
-        PlanningChecklistManagementPanel planningChecklistManagementPanel = new PlanningChecklistManagementPanel(currentUser, this, cardsPanel); // NEW: Instantiate
-        functionalPanels.put("PlanningChecklistManagementPanel", planningChecklistManagementPanel); // NEW: Add to map
-        refreshablePanels.put("PlanningChecklistManagementPanel", planningChecklistManagementPanel); // NEW: Add to refreshable map
+        PlanningChecklistManagementPanel planningChecklistManagementPanel = new PlanningChecklistManagementPanel(currentUser, this, cardsPanel); 
+        functionalPanels.put("PlanningChecklistManagementPanel", planningChecklistManagementPanel); 
+        refreshablePanels.put("PlanningChecklistManagementPanel", planningChecklistManagementPanel); 
 
         // Committee Panels
         CommitteeReviewPanel committeeReviewPanel = new CommitteeReviewPanel(currentUser, this, cardsPanel);
         functionalPanels.put("CommitteeReviewPanel", committeeReviewPanel);
         refreshablePanels.put("CommitteeReviewPanel", committeeReviewPanel);
         
-        CommitteeMeetingsPanel committeeMeetingsPanel = new CommitteeMeetingsPanel(currentUser, this, cardsPanel); // NEW: Instantiate
-        functionalPanels.put("CommitteeMeetingsPanel", committeeMeetingsPanel); // NEW: Add to map
-        refreshablePanels.put("CommitteeMeetingsPanel", committeeMeetingsPanel); // NEW: Add to refreshable map
+        CommitteeMeetingsPanel committeeMeetingsPanel = new CommitteeMeetingsPanel(currentUser, this, cardsPanel); 
+        functionalPanels.put("CommitteeMeetingsPanel", committeeMeetingsPanel); 
+        refreshablePanels.put("CommitteeMeetingsPanel", committeeMeetingsPanel); 
 
         // Director Panels
         DirectorReviewPanel directorReviewPanel = new DirectorReviewPanel(currentUser, this, cardsPanel);
@@ -295,7 +316,24 @@ public class Dashboard extends JFrame {
         functionalPanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
         refreshablePanels.put("AdminRejectedPlansPanel", adminRejectedPlansPanel);
 
-        // Developer Panel (NEW)
+        // NEW: Common Panels for Admin/Developer
+        // For logging from these panels, we can use a simple System.out.println or a more sophisticated UI logger.
+        // For now, we'll pass a lambda that prints to console.
+        Consumer<String> consoleLogger = message -> System.out.println("[Common Panel Log] " + message);
+
+        LiveSyncMonitorPanel liveSyncMonitorPanel = new LiveSyncMonitorPanel(syncConfigManager, consoleLogger);
+        functionalPanels.put("LiveSyncMonitorPanel", liveSyncMonitorPanel);
+        refreshablePanels.put("LiveSyncMonitorPanel", liveSyncMonitorPanel);
+
+        CommunicationSettingsPanel communicationSettingsPanel = new CommunicationSettingsPanel(communicationManager, consoleLogger);
+        functionalPanels.put("CommunicationSettingsPanel", communicationSettingsPanel);
+        refreshablePanels.put("CommunicationSettingsPanel", communicationSettingsPanel);
+
+        CentralDbConfigPanel centralDbConfigPanel = new CentralDbConfigPanel(consoleLogger);
+        functionalPanels.put("CentralDbConfigPanel", centralDbConfigPanel);
+        refreshablePanels.put("CentralDbConfigPanel", centralDbConfigPanel);
+
+        // Developer Panel 
         DeveloperPanel developerPanel = new DeveloperPanel(currentUser, this, cardsPanel);
         functionalPanels.put("DeveloperPanel", developerPanel);
         refreshablePanels.put("DeveloperPanel", developerPanel);
@@ -373,6 +411,17 @@ public class Dashboard extends JFrame {
 
     public void showRoleDashboard(String role) {
         showDefaultRolePanel(role);
+    }
+
+    // NEW: Method to refresh all panels
+    public void refreshAllPanels() {
+        for (Refreshable panel : refreshablePanels.values()) {
+            panel.refreshData();
+        }
+        cardsPanel.revalidate();
+        cardsPanel.repaint();
+        revalidate();
+        repaint();
     }
 
     public interface Refreshable {

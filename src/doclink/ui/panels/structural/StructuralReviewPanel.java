@@ -1,17 +1,18 @@
 package doclink.ui.panels.structural;
 
-import doclink.Database; // Added import
+import doclink.Database;
 import doclink.models.Log;
 import doclink.models.Plan;
 import doclink.models.User;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
-import doclink.ui.components.DocumentViewerDialog; // NEW: Import DocumentViewerDialog
+import doclink.ui.components.DocumentViewerDialog;
+import doclink.communication.CommunicationManager; // NEW: Import CommunicationManager
 
 import javax.swing.*;
-import javax.swing.event.ListSelectionEvent; // Added import
-import javax.swing.event.ListSelectionListener; // Added import
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -30,12 +31,14 @@ public class StructuralReviewPanel extends JPanel implements Dashboard.Refreshab
     private JButton approveToCommitteeButton, rejectToPlanningButton, deferInStructuralButton, viewDocumentsButton; // Added viewDocumentsButton
 
     private Plan selectedPlan;
+    private CommunicationManager communicationManager; // NEW: Instance of CommunicationManager
     private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
 
     public StructuralReviewPanel(User user, Dashboard parentDashboard, DashboardCardsPanel cardsPanel) {
         this.currentUser = user;
         this.parentDashboard = parentDashboard;
         this.cardsPanel = cardsPanel;
+        this.communicationManager = new CommunicationManager(message -> System.out.println("[StructuralReviewPanel] " + message)); // NEW: Initialize CommunicationManager
         setLayout(new BorderLayout());
         setBackground(new Color(245, 247, 250)); // Reverted to light grey
 
@@ -219,10 +222,14 @@ public class StructuralReviewPanel extends JPanel implements Dashboard.Refreshab
             return;
         }
 
-        Database.updatePlanStatus(selectedPlan.getId(), "Under Review (Committee)", "Approved by Structural. Forwarded to Technical Committee. Remarks: " + remarks);
+        Database.updatePlanStatus(selectedPlan.getId(), "Approved by Structural (to Committee)", "Approved by Structural. Forwarded to Technical Committee. Remarks: " + remarks);
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Committee", "Approved by Structural", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan approved by Structural and forwarded to Technical Committee.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Committee members about new plan for review
+        communicationManager.notifyByRole("Committee", "Committee_NewPlanForReview_Email", communicationManager.createPlanUserReplacements(selectedPlan, null)); // Assuming a template exists
+
         clearDetails();
         refreshData();
     }
@@ -247,6 +254,12 @@ public class StructuralReviewPanel extends JPanel implements Dashboard.Refreshab
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Rejected by Structural", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan rejected by Structural and returned to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Planning about rejected plan
+        List<String[]> replacements = communicationManager.createPlanUserReplacements(selectedPlan, null);
+        replacements.add(new String[]{"fromRole", currentUser.getRole()}); // Add the role that rejected it
+        communicationManager.notifyByRole("Planning", "Planning_PlanRejected_Email", replacements);
+
         clearDetails();
         refreshData();
     }
@@ -271,6 +284,12 @@ public class StructuralReviewPanel extends JPanel implements Dashboard.Refreshab
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), currentUser.getRole(), "Deferred by Structural", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan deferred by Structural. Awaiting clarification.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Planning about deferred plan
+        List<String[]> replacements = communicationManager.createPlanUserReplacements(selectedPlan, null);
+        replacements.add(new String[]{"fromRole", currentUser.getRole()}); // Add the role that deferred it
+        communicationManager.notifyByRole("Planning", "Planning_PlanDeferred_Email", replacements);
+
         clearDetails();
         refreshData();
     }

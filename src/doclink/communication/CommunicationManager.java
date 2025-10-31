@@ -5,13 +5,16 @@ import doclink.Database;
 import doclink.models.MessageLog;
 import doclink.models.MessageTemplate;
 import doclink.models.User;
-import doclink.models.UserPreference;
 import doclink.models.SystemUpdate; // Added import for SystemUpdate
+import doclink.models.Plan; // NEW: Added import for Plan
+import doclink.models.UserPreference; // NEW: Added import for UserPreference
 
 import jakarta.mail.*; // Changed from javax.mail.*
 import jakarta.mail.internet.InternetAddress; // Changed from javax.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeMessage; // Changed from javax.mail.internet.MimeMessage
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter; // NEW: Import DateTimeFormatter
+import java.util.ArrayList; // NEW: Import ArrayList
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Consumer;
@@ -176,10 +179,36 @@ public class CommunicationManager {
         return result;
     }
 
+    /**
+     * Helper method to create a list of replacements from a Plan and User object.
+     * This centralizes the logic for common placeholders.
+     * @param plan The Plan object.
+     * @param user The User object (e.g., the client).
+     * @return A list of String arrays, where each inner array is { "placeholderKey", "value" }.
+     */
+    public List<String[]> createPlanUserReplacements(Plan plan, User user) {
+        List<String[]> replacements = new ArrayList<>();
+        if (user != null) {
+            replacements.add(new String[]{"clientName", user.getName()});
+            replacements.add(new String[]{"clientEmail", user.getEmail()});
+            replacements.add(new String[]{"clientContact", user.getContact()});
+        }
+        if (plan != null) {
+            replacements.add(new String[]{"referenceNo", plan.getReferenceNo() != null ? plan.getReferenceNo() : "N/A"});
+            replacements.add(new String[]{"plotNo", plan.getPlotNo()});
+            replacements.add(new String[]{"location", plan.getLocation()});
+            replacements.add(new String[]{"dateSubmitted", plan.getDateSubmitted().format(DateTimeFormatter.ofPattern("dd MMMM yyyy"))});
+            replacements.add(new String[]{"status", plan.getStatus()});
+            replacements.add(new String[]{"remarks", plan.getRemarks() != null ? plan.getRemarks() : "N/A"});
+        }
+        return replacements;
+    }
+
     // --- Notification Triggers ---
 
     /**
      * Notifies a specific user (e.g., client) via email and/or SMS based on their preferences.
+     * This version takes a pre-built list of replacements.
      *
      * @param user The User object to notify.
      * @param templateName The name of the message template to use.
@@ -211,6 +240,19 @@ public class CommunicationManager {
         } else if (user.getContact() == null || user.getContact().isEmpty()) {
             log("Warning: User " + user.getEmail() + " has no contact number for SMS.");
         }
+    }
+
+    /**
+     * NEW: Notifies a specific user (e.g., client) via email and/or SMS based on their preferences,
+     * automatically generating replacements from a Plan and User object.
+     *
+     * @param user The User object to notify.
+     * @param plan The Plan object relevant to the notification.
+     * @param templateName The name of the message template to use.
+     */
+    public void notifyUser(User user, Plan plan, String templateName) {
+        List<String[]> replacements = createPlanUserReplacements(plan, user);
+        notifyUser(user, templateName, replacements); // Call the generic version
     }
 
     /**

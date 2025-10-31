@@ -3,16 +3,16 @@ package doclink.sync;
 import doclink.AppConfig;
 import doclink.Database;
 import doclink.models.Peer;
-import doclink.models.ChangelogEntry; // NEW: Import ChangelogEntry
-import doclink.models.Plan; // NEW: Import Plan
-import doclink.models.User; // NEW: Import User
-import doclink.models.Document; // NEW: Import Document
+import doclink.models.ChangelogEntry;
+import doclink.models.Plan;
+import doclink.models.User;
+import doclink.models.Document;
 
 import javax.swing.*;
 import java.io.IOException;
 import java.net.*;
-import java.sql.Connection; // NEW: Import Connection
-import java.sql.SQLException; // NEW: Import SQLException
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Collectors; // NEW: Import Collectors
+import java.util.stream.Collectors;
 
 public class SyncConfigManager {
 
@@ -30,7 +30,7 @@ public class SyncConfigManager {
 
     private SyncRole currentSyncRole;
     private HybridSyncMode currentHybridSyncMode;
-    private boolean deleteLocalOnCentralPull; // NEW: Field for the new setting
+    private boolean deleteLocalOnCentralPull;
     private ScheduledExecutorService scheduler;
     private Consumer<String> logConsumer; // For logging messages to the UI
 
@@ -58,14 +58,14 @@ public class SyncConfigManager {
     public void loadSettings() {
         currentSyncRole = SyncRole.valueOf(AppConfig.getProperty(AppConfig.SYNC_ROLE_KEY, SyncRole.CLIENT.name()));
         currentHybridSyncMode = HybridSyncMode.valueOf(AppConfig.getProperty(AppConfig.HYBRID_SYNC_MODE_KEY, HybridSyncMode.P2P_ONLY.name()));
-        deleteLocalOnCentralPull = AppConfig.getBooleanProperty(AppConfig.DELETE_LOCAL_ON_CENTRAL_PULL_KEY, false); // NEW: Load the new setting
+        deleteLocalOnCentralPull = AppConfig.getBooleanProperty(AppConfig.DELETE_LOCAL_ON_CENTRAL_PULL_KEY, false);
         log("Settings loaded. Role: " + currentSyncRole + ", Hybrid Mode: " + currentHybridSyncMode + ", Delete Local on Central Pull: " + deleteLocalOnCentralPull);
     }
 
     public void saveSettings() {
         AppConfig.setProperty(AppConfig.SYNC_ROLE_KEY, currentSyncRole.name());
         AppConfig.setProperty(AppConfig.HYBRID_SYNC_MODE_KEY, currentHybridSyncMode.name());
-        AppConfig.setBooleanProperty(AppConfig.DELETE_LOCAL_ON_CENTRAL_PULL_KEY, deleteLocalOnCentralPull); // NEW: Save the new setting
+        AppConfig.setBooleanProperty(AppConfig.DELETE_LOCAL_ON_CENTRAL_PULL_KEY, deleteLocalOnCentralPull);
         log("Settings saved.");
     }
 
@@ -93,12 +93,12 @@ public class SyncConfigManager {
         }
     }
 
-    // NEW: Getter for deleteLocalOnCentralPull
+    // Getter for deleteLocalOnCentralPull
     public boolean isDeleteLocalOnCentralPullEnabled() {
         return deleteLocalOnCentralPull;
     }
 
-    // NEW: Setter for deleteLocalOnCentralPull
+    // Setter for deleteLocalOnCentralPull
     public void setDeleteLocalOnCentralPull(boolean enabled) {
         if (this.deleteLocalOnCentralPull != enabled) {
             this.deleteLocalOnCentralPull = enabled;
@@ -152,7 +152,7 @@ public class SyncConfigManager {
                     udpSocket = null; // Explicitly nullify the socket
                 }
                 // Give a small moment for the OS to release the port
-                Thread.sleep(100); 
+                Thread.sleep(100);
             } catch (Exception e) {
                 log("Error closing UDP socket: " + e.getMessage());
             }
@@ -202,7 +202,7 @@ public class SyncConfigManager {
 
             String requestMessage = "DOCLINK_DISCOVERY_REQUEST";
             byte[] sendData = requestMessage.getBytes();
-            
+
             // Send broadcast to all interfaces
             InetAddress broadcastAddress = InetAddress.getByName("255.255.255.255");
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, broadcastAddress, DISCOVERY_PORT);
@@ -222,7 +222,7 @@ public class SyncConfigManager {
                         if (parts.length == 3) {
                             String peerIp = receivePacket.getAddress().getHostAddress();
                             int peerPort = Integer.parseInt(parts[2]);
-                            
+
                             // Avoid adding self
                             if (!peerIp.equals(InetAddress.getLocalHost().getHostAddress()) || peerPort != P2P_TCP_PORT) {
                                 log("Discovered peer: " + peerIp + ":" + peerPort);
@@ -266,7 +266,7 @@ public class SyncConfigManager {
                     if (message.equals("DOCLINK_DISCOVERY_REQUEST")) {
                         String response = "DOCLINK_DISCOVERY_RESPONSE:" + InetAddress.getLocalHost().getHostAddress() + ":" + P2P_TCP_PORT;
                         byte[] sendData = response.getBytes();
-                        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, packet.getAddress(), packet.getPort()); // Corrected port to packet.getPort()
+                        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, packet.getAddress(), packet.getPort());
                         udpSocket.send(sendPacket);
                         log("Responded to discovery request from: " + packet.getAddress().getHostAddress());
                     }
@@ -372,7 +372,7 @@ public class SyncConfigManager {
         // In a real implementation, you would make a small GET request
         // to a health check endpoint or similar.
         try {
-            URL url = new URI(apiUrl).toURL(); // Use URI for safer parsing
+            URL url = new URI(apiUrl).toURL();
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(5000); // 5 seconds
@@ -404,11 +404,14 @@ public class SyncConfigManager {
         if (currentHybridSyncMode == HybridSyncMode.CENTRAL_API_ONLY || currentHybridSyncMode == HybridSyncMode.HYBRID) {
             performCentralApiSync();
         }
-        // NEW: Also trigger local-to-central DB sync if applicable
-        if (Database.getCurrentDatabaseType() == Database.DatabaseType.SQLITE && 
+        // Also trigger local-to-central DB sync if applicable
+        if (Database.getCurrentDatabaseType() == Database.DatabaseType.SQLITE &&
             (currentHybridSyncMode == HybridSyncMode.HYBRID || currentHybridSyncMode == HybridSyncMode.P2P_ONLY)) { // P2P_ONLY implies local DB is primary
             performLocalToCentralDbSync();
-            performCentralToLocalDbSync(); // NEW: Also pull from central on force sync
+            // Explicitly trigger central-to-local DB sync on force sync if central DB is configured
+            if (AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY) != null && !AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY).trim().isEmpty()) {
+                performCentralToLocalDbSync();
+            }
         }
     }
 
@@ -460,11 +463,11 @@ public class SyncConfigManager {
         int interval = getSyncIntervalMinutes();
         scheduler.scheduleAtFixedRate(() -> {
             performP2PSync();
-            // NEW: Also trigger local-to-central DB sync if applicable
-            if (Database.getCurrentDatabaseType() == Database.DatabaseType.SQLITE && 
+            // Also trigger local-to-central DB sync if applicable
+            if (Database.getCurrentDatabaseType() == Database.DatabaseType.SQLITE &&
                 (currentHybridSyncMode == HybridSyncMode.HYBRID || currentHybridSyncMode == HybridSyncMode.P2P_ONLY)) {
                 performLocalToCentralDbSync();
-                performCentralToLocalDbSync(); // NEW: Also pull from central on scheduled sync
+                performCentralToLocalDbSync(); // Also pull from central on scheduled sync
             }
         }, 0, interval, TimeUnit.MINUTES);
         log("Scheduled P2P sync to run every " + interval + " minutes.");
@@ -526,7 +529,7 @@ public class SyncConfigManager {
         try {
             // Simulate GET updates
             log("Simulating GET updates from Central API...");
-            URL getUrl = new URI(apiUrl + "/api/sync/updates?since=" + getLastCentralSyncTimestamp()).toURL(); // Uncommented
+            URL getUrl = new URI(apiUrl + "/api/sync/updates?since=" + getLastCentralSyncTimestamp()).toURL();
             // HttpURLConnection getConn = (HttpURLConnection) getUrl.openConnection();
             // getConn.setRequestMethod("GET");
             // getConn.setRequestProperty("Authorization", "Bearer " + authToken);
@@ -535,7 +538,7 @@ public class SyncConfigManager {
 
             // Simulate POST changes
             log("Simulating POST local changes to Central API...");
-            URL postUrl = new URI(apiUrl + "/api/sync/changes").toURL(); // Uncommented
+            URL postUrl = new URI(apiUrl + "/api/sync/changes").toURL();
             // HttpURLConnection postConn = (HttpURLConnection) postUrl.openConnection();
             // postConn.setRequestMethod("POST");
             // postConn.setRequestProperty("Content-Type", "application/json");
@@ -640,7 +643,7 @@ public class SyncConfigManager {
             log("Pulled and upserted " + centralUsers.size() + " users into local SQLite from central DB.");
 
             // Identify and delete users from local DB that are no longer in central DB
-            if (deleteLocalOnCentralPull) { // NEW: Check the setting
+            if (deleteLocalOnCentralPull) {
                 List<Integer> centralUserIds = centralUsers.stream().map(User::getId).collect(Collectors.toList());
                 for (User localUser : localUsers) {
                     if (!centralUserIds.contains(localUser.getId())) {
@@ -659,7 +662,7 @@ public class SyncConfigManager {
             log("Pulled and upserted " + centralPlans.size() + " plans from central DB to local SQLite.");
 
             // Identify and delete plans from local DB that are no longer in central DB
-            if (deleteLocalOnCentralPull) { // NEW: Check the setting
+            if (deleteLocalOnCentralPull) {
                 List<Integer> centralPlanIds = centralPlans.stream().map(Plan::getId).collect(Collectors.toList());
                 for (Plan localPlan : localPlans) {
                     if (!centralPlanIds.contains(localPlan.getId())) {

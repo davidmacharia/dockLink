@@ -21,13 +21,14 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import doclink.communication.CommunicationManager; // NEW: Import CommunicationManager
 
 public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refreshable {
     private User currentUser;
     private Dashboard parentDashboard;
     private DashboardCardsPanel cardsPanel;
 
-    // Form components for New Plan Submission
+    // Form components
     private JTextField applicantNameField;
     private JTextField contactField;
     private JTextField plotNoField;
@@ -38,10 +39,13 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
     private JButton submitPlanButton;
     private static final Color DARK_NAVY = new Color(26, 35, 126);
 
+    private CommunicationManager communicationManager; // NEW: Instance of CommunicationManager
+
     public ReceptionSubmissionPanel(User user, Dashboard parentDashboard, DashboardCardsPanel cardsPanel) {
         this.currentUser = user;
         this.parentDashboard = parentDashboard;
         this.cardsPanel = cardsPanel;
+        this.communicationManager = new CommunicationManager(message -> System.out.println("[ReceptionSubmissionPanel] " + message)); // NEW: Initialize CommunicationManager
         setLayout(new GridBagLayout());
         setBackground(new Color(245, 247, 250));
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
@@ -296,6 +300,11 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
             Database.addDocument(doc);
         }
 
+        // Retrieve the actual User object for the applicant based on the entered name/contact
+        // For simplicity, assuming applicantNameField matches a user's name in the DB
+        // In a real app, you'd likely have a more robust way to link to an existing client user or create one.
+        User applicantUser = Database.getUserByEmail(contact); // Assuming contact is email for simplicity
+
         if (!allRequiredAttached) {
             int confirm = JOptionPane.showConfirmDialog(this, "Some required documents are not attached. Do you want to proceed and return to applicant?", "Incomplete Submission", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
@@ -303,6 +312,14 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
                 Database.updatePlanStatus(newPlan.getId(), "Client Notified (Awaiting Resubmission)", "Incomplete submission: Missing required documents. Client needs to resubmit.");
                 Database.addLog(new Log(newPlan.getId(), currentUser.getRole(), "Client", "Incomplete Submission", "Missing required documents."));
                 JOptionPane.showMessageDialog(this, "Plan marked as incomplete and client notified for resubmission.", "Submission Info", JOptionPane.INFORMATION_MESSAGE);
+                
+                // NEW: Notify client about incomplete submission
+                if (applicantUser != null) {
+                    communicationManager.notifyUser(applicantUser, newPlan, "Client_ApplicationRejected"); // Using rejected template for now
+                } else {
+                    System.err.println("Applicant user not found for notification: " + contact);
+                }
+
                 clearSubmissionForm();
                 refreshData();
                 return;
@@ -320,6 +337,14 @@ public class ReceptionSubmissionPanel extends JPanel implements Dashboard.Refres
         Database.addLog(new Log(newPlan.getId(), currentUser.getRole(), "Planning", "Forwarded for Review", "Initial submission, documents verified."));
 
         JOptionPane.showMessageDialog(this, "Plan submitted successfully and forwarded to Planning Department.", "Submission Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify client about successful submission
+        if (applicantUser != null) {
+            communicationManager.notifyUser(applicantUser, newPlan, "Client_NewApplicationSubmitted");
+        } else {
+            System.err.println("Applicant user not found for notification: " + contact);
+        }
+
         clearSubmissionForm();
         refreshData();
     }

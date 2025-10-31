@@ -11,6 +11,9 @@ import doclink.models.User;
 import doclink.sync.SyncConfigManager;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
+import doclink.ui.panels.common.CentralDbConfigPanel; // NEW: Import CentralDbConfigPanel
+import doclink.ui.panels.common.CommunicationSettingsPanel; // NEW: Import CommunicationSettingsPanel
+import doclink.ui.panels.common.LiveSyncMonitorPanel; // NEW: Import LiveSyncMonitorPanel
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -64,17 +67,17 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     private JCheckBox autoSyncEnabledCheckBox;
     private JCheckBox compressionEnabledCheckBox;
     private JCheckBox encryptionEnabledCheckBox;
-    private JCheckBox deleteLocalOnCentralPullCheckBox; // NEW: Checkbox for deleteLocalOnCentralPull
+    private JCheckBox deleteLocalOnCentralPullCheckBox; 
     
-    // NEW: Separate field for Central API URL
     private JTextField centralApiUrlInputField; 
     private JTextField centralApiAuthTokenField;
     private JButton testCentralApiConnectionButton;
     private JButton saveSyncSettingsButton;
 
-    private JTextArea liveSyncMonitorArea;
-    private JButton forceSyncNowButton;
-    private JButton forceLocalToCentralDbSyncButton; // NEW: Button for local-to-central DB sync
+    // NEW: Instances of common panels
+    private LiveSyncMonitorPanel liveSyncMonitorPanel;
+    private CommunicationSettingsPanel communicationSettingsPanel;
+    private CentralDbConfigPanel centralDbConfigPanel;
 
     // System Update Broadcast components
     private JTextField updateVersionField, updateTitleField;
@@ -87,30 +90,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
     private JTable systemUpdateLogTable;
     private DefaultTableModel systemUpdateLogTableModel;
     private SystemUpdate selectedSystemUpdate; 
-
-    private JTextField smtpHostField, smtpPortField, smtpUsernameField, senderEmailField;
-    private JPasswordField smtpPasswordField; 
-    private JTextField smsApiKeyField, smsSenderIdField;
-    private JCheckBox autoNotificationsEnabledCheckBox;
-    private JButton saveCommSettingsButton;
-    private JTable messageTemplatesTable;
-    private DefaultTableModel messageTemplatesTableModel;
-    private JTextArea templateBodyArea;
-    private JTextField templateSubjectField;
-    private JComboBox<String> templateTypeComboBox;
-    private JButton updateTemplateButton;
-    private JButton deleteTemplateButton; 
-    private MessageTemplate selectedTemplate;
-    private JTable messageLogTable;
-    private DefaultTableModel messageLogTableModel;
-
-    // RENAMED: Field for Central DB URL
-    private JTextField centralDbUrlInputField; 
-    private JLabel currentConfiguredUrlLabel;
-    private JButton saveDbConfigButton;
-    private JButton testDbConnectionButton;
-    private JButton clearDbConfigButton;
-
 
     private static final Color DARK_NAVY = new Color(26, 35, 126);
     private static final DateTimeFormatter LOG_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -129,6 +108,11 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         this.syncConfigManager = new SyncConfigManager(this::logMessage);
         this.communicationManager = new CommunicationManager(this::logMessage);
 
+        // NEW: Initialize common panels
+        this.liveSyncMonitorPanel = new LiveSyncMonitorPanel(syncConfigManager, this::logMessage);
+        this.communicationSettingsPanel = new CommunicationSettingsPanel(communicationManager, this::logMessage);
+        this.centralDbConfigPanel = new CentralDbConfigPanel(this::logMessage);
+
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
         tabbedPane.setBackground(new Color(200, 220, 255)); 
@@ -138,10 +122,10 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         tabbedPane.addTab("Sync Configuration", createSyncConfigPanel());
         tabbedPane.addTab("Peer Management", createPeerManagementPanel());
         tabbedPane.addTab("Sync Settings", createSyncSettingsPanel());
-        tabbedPane.addTab("Live Sync Monitor", createLiveSyncMonitorPanel());
+        tabbedPane.addTab("Live Sync Monitor", liveSyncMonitorPanel); // NEW: Use instance
         tabbedPane.addTab("System Update Broadcast", createSystemUpdateBroadcastPanel());
-        tabbedPane.addTab("Communication Settings", createCommunicationSettingsPanel());
-        tabbedPane.addTab("Central DB Config", createCentralDbConfigPanel());
+        tabbedPane.addTab("Communication Settings", communicationSettingsPanel); // NEW: Use instance
+        tabbedPane.addTab("Central DB Config", centralDbConfigPanel); // NEW: Use instance
         tabbedPane.addTab("Data Export/Import", createDataExportImportPanel());
 
         add(tabbedPane, BorderLayout.CENTER); 
@@ -177,10 +161,8 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
             syncLogArea.append(LocalDateTime.now().format(LOG_FORMATTER) + " - " + message + "\n");
             syncLogArea.setCaretPosition(syncLogArea.getDocument().getLength()); 
         }
-        if (liveSyncMonitorArea != null) {
-            liveSyncMonitorArea.append(LocalDateTime.now().format(LOG_FORMATTER) + " - " + message + "\n");
-            liveSyncMonitorArea.setCaretPosition(liveSyncMonitorArea.getDocument().getLength());
-        }
+        // The LiveSyncMonitorPanel now handles its own logging and passes it up via its logConsumer
+        // So, no need to directly append to liveSyncMonitorArea here.
     }
 
     // --- Tab 1: Sync Role Configuration ---
@@ -390,104 +372,135 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
     // --- Tab 3: Sync Settings ---
     private JPanel createSyncSettingsPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
+        JPanel panel = new JPanel(new BorderLayout(20, 20)); // Use BorderLayout for main panel
         panel.setBackground(Color.WHITE); 
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.gridwidth = 2;
-
         JLabel title = new JLabel("Advanced Sync Settings");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
         title.setForeground(DARK_NAVY);
-        panel.add(title, gbc);
+        title.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(title, BorderLayout.NORTH);
 
-        gbc.gridy++;
-        gbc.gridwidth = 1;
-        panel.add(new JLabel("Sync Interval (minutes):"), gbc);
-        gbc.gridx = 1;
+        // Create a sub-panel for the two side-by-side sections
+        JPanel twoColumnPanel = new JPanel(new GridLayout(1, 2, 20, 0)); // 1 row, 2 columns, 20px horizontal gap
+        twoColumnPanel.setOpaque(false);
+
+        // Left Section Panel
+        JPanel leftPanel = new JPanel(new GridBagLayout());
+        leftPanel.setOpaque(false);
+        leftPanel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), "General Sync Parameters"));
+        GridBagConstraints gbcLeft = new GridBagConstraints();
+        gbcLeft.insets = new Insets(5, 5, 5, 5);
+        gbcLeft.fill = GridBagConstraints.HORIZONTAL;
+        gbcLeft.anchor = GridBagConstraints.WEST;
+        gbcLeft.gridx = 0;
+        int rowLeft = 0;
+
+        gbcLeft.gridy = rowLeft++;
+        leftPanel.add(new JLabel("Sync Interval (minutes):"), gbcLeft);
+        gbcLeft.gridx = 1;
         syncIntervalSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 60, 1));
-        panel.add(syncIntervalSpinner, gbc);
+        leftPanel.add(syncIntervalSpinner, gbcLeft);
 
-        gbc.gridx = 0;
-        gbc.gridy++;
-        panel.add(new JLabel("Conflict Resolution:"), gbc);
-        gbc.gridx = 1;
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = rowLeft++;
+        leftPanel.add(new JLabel("Conflict Resolution:"), gbcLeft);
+        gbcLeft.gridx = 1;
         conflictStrategyComboBox = new JComboBox<>(new String[]{"LAST_WRITE_WINS", "SERVER_WINS", "CLIENT_WINS"});
-        panel.add(conflictStrategyComboBox, gbc);
+        leftPanel.add(conflictStrategyComboBox, gbcLeft);
 
-        gbc.gridx = 0;
-        gbc.gridy++;
-        panel.add(new JLabel("Changelog Retention (days):"), gbc);
-        gbc.gridx = 1;
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = rowLeft++;
+        leftPanel.add(new JLabel("Changelog Retention (days):"), gbcLeft);
+        gbcLeft.gridx = 1;
         changelogRetentionSpinner = new JSpinner(new SpinnerNumberModel(30, 1, 365, 1));
-        panel.add(changelogRetentionSpinner, gbc);
+        leftPanel.add(changelogRetentionSpinner, gbcLeft);
 
-        gbc.gridx = 0;
-        gbc.gridy++;
-        panel.add(new JLabel("Enable Auto-Sync:"), gbc);
-        gbc.gridx = 1;
+        gbcLeft.gridx = 0;
+        gbcLeft.gridy = rowLeft++;
+        leftPanel.add(new JLabel("Enable Auto-Sync:"), gbcLeft);
+        gbcLeft.gridx = 1;
         autoSyncEnabledCheckBox = new JCheckBox();
         autoSyncEnabledCheckBox.setOpaque(false);
-        panel.add(autoSyncEnabledCheckBox, gbc);
+        leftPanel.add(autoSyncEnabledCheckBox, gbcLeft);
+        
+        gbcLeft.gridy = rowLeft++;
+        gbcLeft.weighty = 1.0; // Push content to top
+        leftPanel.add(Box.createVerticalGlue(), gbcLeft);
 
-        gbc.gridx = 0;
-        gbc.gridy++;
-        panel.add(new JLabel("Enable Compression (GZIP):"), gbc);
-        gbc.gridx = 1;
+
+        // Right Section Panel
+        JPanel rightPanel = new JPanel(new GridBagLayout());
+        rightPanel.setOpaque(false);
+        rightPanel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), "Advanced & Central API Settings"));
+        GridBagConstraints gbcRight = new GridBagConstraints();
+        gbcRight.insets = new Insets(5, 5, 5, 5);
+        gbcRight.fill = GridBagConstraints.HORIZONTAL;
+        gbcRight.anchor = GridBagConstraints.WEST;
+        gbcRight.gridx = 0;
+        int rowRight = 0;
+
+        gbcRight.gridy = rowRight++;
+        rightPanel.add(new JLabel("Enable Compression (GZIP):"), gbcRight);
+        gbcRight.gridx = 1;
         compressionEnabledCheckBox = new JCheckBox();
         compressionEnabledCheckBox.setOpaque(false);
-        panel.add(compressionEnabledCheckBox, gbc);
+        rightPanel.add(compressionEnabledCheckBox, gbcRight);
 
-        gbc.gridx = 0;
-        gbc.gridy++;
-        panel.add(new JLabel("Enable Encryption (AES/TLS):"), gbc);
-        gbc.gridx = 1;
+        gbcRight.gridx = 0;
+        gbcRight.gridy = rowRight++;
+        rightPanel.add(new JLabel("Enable Encryption (AES/TLS):"), gbcRight);
+        gbcRight.gridx = 1;
         encryptionEnabledCheckBox = new JCheckBox();
         encryptionEnabledCheckBox.setOpaque(false);
-        panel.add(encryptionEnabledCheckBox, gbc);
+        rightPanel.add(encryptionEnabledCheckBox, gbcRight);
 
-        // NEW: Delete Local on Central Pull Checkbox
-        gbc.gridx = 0;
-        gbc.gridy++;
-        gbc.gridwidth = 2;
+        gbcRight.gridx = 0;
+        gbcRight.gridy = rowRight++;
+        gbcRight.gridwidth = 2;
         deleteLocalOnCentralPullCheckBox = new JCheckBox("Delete Local Data on Central Pull (if not in central)");
         deleteLocalOnCentralPullCheckBox.setOpaque(false);
-        panel.add(deleteLocalOnCentralPullCheckBox, gbc);
+        rightPanel.add(deleteLocalOnCentralPullCheckBox, gbcRight);
 
-        // NEW: Central API URL and Auth Token fields
-        gbc.gridx = 0;
-        gbc.gridy++;
-        gbc.gridwidth = 2;
-        panel.add(new JLabel("--- Central API Settings (for Hybrid Sync) ---"), gbc);
+        gbcRight.gridy = rowRight++;
+        rightPanel.add(new JSeparator(), gbcRight); // Separator for Central API settings
+
+        gbcRight.gridy = rowRight++;
+        JLabel centralApiTitle = new JLabel("Central API Settings:");
+        centralApiTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        centralApiTitle.setForeground(DARK_NAVY);
+        rightPanel.add(centralApiTitle, gbcRight);
         
-        gbc.gridwidth = 1;
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Central API URL:"), gbc);
-        gbc.gridx = 1; centralApiUrlInputField = new JTextField(25); panel.add(centralApiUrlInputField, gbc);
+        gbcRight.gridwidth = 1;
+        gbcRight.gridy = rowRight++; gbcRight.gridx = 0; rightPanel.add(new JLabel("Central API URL:"), gbcRight);
+        gbcRight.gridx = 1; centralApiUrlInputField = new JTextField(25); rightPanel.add(centralApiUrlInputField, gbcRight);
 
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Central API Auth Token:"), gbc);
-        gbc.gridx = 1; centralApiAuthTokenField = new JTextField(25); panel.add(centralApiAuthTokenField, gbc);
+        gbcRight.gridy = rowRight++; gbcRight.gridx = 0; rightPanel.add(new JLabel("Central API Auth Token:"), gbcRight);
+        gbcRight.gridx = 1; centralApiAuthTokenField = new JTextField(25); rightPanel.add(centralApiAuthTokenField, gbcRight);
 
-        gbc.gridy++; gbc.gridx = 0; gbc.gridwidth = 2;
+        gbcRight.gridy = rowRight++; gbcRight.gridx = 0; gbcRight.gridwidth = 2;
         testCentralApiConnectionButton = createStyledButton("Test Central API Connection", new Color(0, 123, 255));
         testCentralApiConnectionButton.addActionListener(e -> syncConfigManager.testCentralApiConnection());
-        panel.add(testCentralApiConnectionButton, gbc);
+        rightPanel.add(testCentralApiConnectionButton, gbcRight);
 
-        gbc.gridx = 0;
-        gbc.gridy++;
-        gbc.gridwidth = 2;
-        saveSyncSettingsButton = createStyledButton("Save Sync Settings", new Color(40, 167, 69));
+        gbcRight.gridy = rowRight++;
+        gbcRight.weighty = 1.0; // Push content to top
+        rightPanel.add(Box.createVerticalGlue(), gbcRight);
+
+
+        twoColumnPanel.add(leftPanel);
+        twoColumnPanel.add(rightPanel);
+
+        panel.add(twoColumnPanel, BorderLayout.CENTER);
+
+        // Save button at the bottom, spanning both columns
+        JPanel bottomButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        bottomButtonPanel.setOpaque(false);
+        saveSyncSettingsButton = createStyledButton("Save All Sync Settings", new Color(40, 167, 69));
         saveSyncSettingsButton.addActionListener(e -> saveSyncSettings());
-        panel.add(saveSyncSettingsButton, gbc);
-
-        gbc.gridy++;
-        gbc.weighty = 1.0;
-        panel.add(Box.createVerticalGlue(), gbc);
+        bottomButtonPanel.add(saveSyncSettingsButton);
+        panel.add(bottomButtonPanel, BorderLayout.SOUTH);
 
         loadSyncSettings();
         return panel;
@@ -500,7 +513,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         autoSyncEnabledCheckBox.setSelected(syncConfigManager.isAutoSyncEnabled());
         compressionEnabledCheckBox.setSelected(syncConfigManager.isCompressionEnabled());
         encryptionEnabledCheckBox.setSelected(syncConfigManager.isEncryptionEnabled());
-        deleteLocalOnCentralPullCheckBox.setSelected(syncConfigManager.isDeleteLocalOnCentralPullEnabled()); // NEW: Load the setting
+        deleteLocalOnCentralPullCheckBox.setSelected(syncConfigManager.isDeleteLocalOnCentralPullEnabled()); 
         
         // Load Central API settings
         centralApiUrlInputField.setText(syncConfigManager.getCentralApiUrl());
@@ -514,7 +527,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         syncConfigManager.setAutoSyncEnabled(autoSyncEnabledCheckBox.isSelected());
         syncConfigManager.setCompressionEnabled(compressionEnabledCheckBox.isSelected());
         syncConfigManager.setEncryptionEnabled(encryptionEnabledCheckBox.isSelected());
-        syncConfigManager.setDeleteLocalOnCentralPull(deleteLocalOnCentralPullCheckBox.isSelected()); // NEW: Save the setting
+        syncConfigManager.setDeleteLocalOnCentralPull(deleteLocalOnCentralPullCheckBox.isSelected()); 
         
         // Save Central API settings
         String oldCentralApiUrl = AppConfig.getProperty(AppConfig.CENTRAL_API_URL_KEY, "");
@@ -539,48 +552,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
                 System.exit(0); // This will trigger the shutdown hook and restart the app
             }
         }
-    }
-
-    // --- Tab 4: Live Sync Monitor ---
-    private JPanel createLiveSyncMonitorPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBackground(Color.WHITE); 
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
-
-        JLabel title = new JLabel("Live Sync Activity Monitor");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        title.setForeground(DARK_NAVY);
-        panel.add(title, BorderLayout.NORTH);
-
-        liveSyncMonitorArea = new JTextArea();
-        liveSyncMonitorArea.setEditable(false);
-        liveSyncMonitorArea.setLineWrap(true);
-        liveSyncMonitorArea.setWrapStyleWord(true);
-        JScrollPane scrollPane = new JScrollPane(liveSyncMonitorArea);
-        panel.add(scrollPane, BorderLayout.CENTER);
-
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bottomPanel.setOpaque(false);
-        forceSyncNowButton = createStyledButton("Force All Syncs Now", new Color(0, 123, 255));
-        forceSyncNowButton.addActionListener(e -> syncConfigManager.forceSyncNow());
-        bottomPanel.add(forceSyncNowButton);
-
-        // NEW: Button for local-to-central DB sync
-        forceLocalToCentralDbSyncButton = createStyledButton("Force Local-to-Central DB Sync", new Color(255, 165, 0));
-        forceLocalToCentralDbSyncButton.addActionListener(e -> {
-            logMessage("User initiated Force Local-to-Central DB Sync.");
-            syncConfigManager.performLocalToCentralDbSync();
-        });
-        bottomPanel.add(forceLocalToCentralDbSyncButton);
-
-        // NEW: Clear Log Button
-        JButton clearLogButton = createStyledButton("Clear Log", new Color(108, 117, 125)); 
-        clearLogButton.addActionListener(e -> liveSyncMonitorArea.setText(""));
-        bottomPanel.add(clearLogButton);
-
-        panel.add(bottomPanel, BorderLayout.SOUTH);
-
-        return panel;
     }
 
     // --- Tab 5: System Update Broadcast ---
@@ -621,9 +592,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
             public boolean isCellEditable(int row, int column) { return false; }
             @Override
             public Class<?> getColumnClass(int column) {
-                // Column 4 is "Message", which is a String. No need to return Boolean.class.
-                // The default Object.class handling by super.getColumnClass(column) is appropriate.
-                // if (column == 4) return Boolean.class; // Removed this incorrect line
                 return super.getColumnClass(column);
             }
         };
@@ -852,490 +820,6 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         }
     }
 
-
-    // --- Tab 6: Communication Settings ---
-    private JPanel createCommunicationSettingsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setOpaque(false);
-
-        JTabbedPane commTabbedPane = new JTabbedPane();
-        commTabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        commTabbedPane.setBackground(Color.WHITE); 
-
-        commTabbedPane.addTab("Email/SMS Config", createEmailSmsConfigPanel());
-        commTabbedPane.addTab("Message Templates", createMessageTemplatesPanel());
-        commTabbedPane.addTab("Message Logs", createMessageLogsPanel());
-
-        panel.add(commTabbedPane, BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel createEmailSmsConfigPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setOpaque(false);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.anchor = GridBagConstraints.WEST;
-
-        JLabel title = new JLabel("Email (SMTP) & SMS API Configuration");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        title.setForeground(DARK_NAVY);
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
-        panel.add(title, gbc);
-
-        // Email Settings
-        gbc.gridy++;
-        panel.add(new JLabel("--- Email (SMTP) Settings ---"), gbc);
-        gbc.gridwidth = 1;
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMTP Host:"), gbc);
-        gbc.gridx = 1; smtpHostField = new JTextField(25); panel.add(smtpHostField, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMTP Port:"), gbc);
-        gbc.gridx = 1; smtpPortField = new JTextField(5); panel.add(smtpPortField, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMTP Username:"), gbc);
-        gbc.gridx = 1; smtpUsernameField = new JTextField(25); panel.add(smtpUsernameField, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMTP Password:"), gbc);
-        gbc.gridx = 1; smtpPasswordField = new JPasswordField(25); panel.add(smtpPasswordField, gbc); 
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Sender Email:"), gbc);
-        gbc.gridx = 1; senderEmailField = new JTextField(25); panel.add(senderEmailField, gbc);
-
-        // SMS Settings
-        gbc.gridwidth = 2;
-        gbc.gridy++;
-        panel.add(new JLabel("--- SMS API Settings ---"), gbc);
-        gbc.gridwidth = 1;
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMS API Key:"), gbc);
-        gbc.gridx = 1; smsApiKeyField = new JTextField(25); panel.add(smsApiKeyField, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("SMS Sender ID:"), gbc);
-        gbc.gridx = 1; smsSenderIdField = new JTextField(25); panel.add(smsSenderIdField, gbc);
-
-        // Auto Notifications
-        gbc.gridwidth = 2;
-        gbc.gridy++;
-        panel.add(new JLabel("--- Global Notification Settings ---"), gbc);
-        gbc.gridy++;
-        autoNotificationsEnabledCheckBox = new JCheckBox("Enable Automatic Notifications (Email/SMS)");
-        autoNotificationsEnabledCheckBox.setOpaque(false);
-        panel.add(autoNotificationsEnabledCheckBox, gbc);
-
-        gbc.gridy++;
-        saveCommSettingsButton = createStyledButton("Save Communication Settings", new Color(40, 167, 69));
-        saveCommSettingsButton.addActionListener(e -> saveCommunicationSettings());
-        panel.add(saveCommSettingsButton, gbc);
-
-        gbc.gridy++;
-        gbc.weighty = 1.0;
-        panel.add(Box.createVerticalGlue(), gbc);
-
-        loadCommunicationSettings();
-        return panel;
-    }
-
-    private void loadCommunicationSettings() {
-        smtpHostField.setText(AppConfig.getProperty(AppConfig.SMTP_HOST_KEY, ""));
-        smtpPortField.setText(String.valueOf(AppConfig.getIntProperty(AppConfig.SMTP_PORT_KEY, 587)));
-        smtpUsernameField.setText(AppConfig.getProperty(AppConfig.SMTP_USERNAME_KEY, ""));
-        smtpPasswordField.setText(AppConfig.getProperty(AppConfig.SMTP_PASSWORD_KEY, "")); 
-        senderEmailField.setText(AppConfig.getProperty(AppConfig.SENDER_EMAIL_KEY, ""));
-        smsApiKeyField.setText(AppConfig.getProperty(AppConfig.SMS_API_KEY, ""));
-        smsSenderIdField.setText(AppConfig.getProperty(AppConfig.SMS_SENDER_ID_KEY, ""));
-        autoNotificationsEnabledCheckBox.setSelected(AppConfig.getBooleanProperty(AppConfig.AUTO_NOTIFICATIONS_ENABLED_KEY, false));
-    }
-
-    private void saveCommunicationSettings() {
-        try {
-            int smtpPort = Integer.parseInt(smtpPortField.getText().trim());
-            if (smtpPort < 1 || smtpPort > 65535) throw new NumberFormatException();
-
-            communicationManager.saveEmailSettings(
-                smtpHostField.getText().trim(),
-                smtpPort,
-                smtpUsernameField.getText().trim(),
-                new String(smtpPasswordField.getPassword()).trim(),
-                senderEmailField.getText().trim()
-            );
-            communicationManager.saveSmsSettings(
-                smsApiKeyField.getText().trim(),
-                smsSenderIdField.getText().trim()
-            );
-            communicationManager.setAutoNotificationsEnabled(autoNotificationsEnabledCheckBox.isSelected());
-
-            JOptionPane.showMessageDialog(this, "Communication settings saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Invalid SMTP Port number. Must be between 1 and 65535.", "Input Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private JPanel createMessageTemplatesPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setOpaque(false);
-
-        // Top: Template List
-        String[] templateColumnNames = {"ID", "Template Name", "Type", "Subject"};
-        messageTemplatesTableModel = new DefaultTableModel(templateColumnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
-            @Override
-            public Class<?> getColumnClass(int column) {
-                if (column == 4) return Boolean.class;
-                return super.getColumnClass(column);
-            }
-        };
-        messageTemplatesTable = new JTable(messageTemplatesTableModel);
-        messageTemplatesTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        messageTemplatesTable.setRowHeight(20);
-        messageTemplatesTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
-        messageTemplatesTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); 
-        messageTemplatesTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && messageTemplatesTable.getSelectedRow() != -1) {
-                loadSelectedTemplateDetails();
-            } else if (messageTemplatesTable.getSelectedRow() == -1) {
-                clearTemplateForm(); 
-            }
-        });
-        // Hide ID column
-        TableColumn idColumn = messageTemplatesTable.getColumnModel().getColumn(0);
-        idColumn.setMinWidth(0); idColumn.setMaxWidth(0); idColumn.setPreferredWidth(0); idColumn.setResizable(false);
-
-        JScrollPane tableScrollPane = new JScrollPane(messageTemplatesTable);
-        tableScrollPane.setPreferredSize(new Dimension(400, 200)); 
-        panel.add(tableScrollPane, BorderLayout.NORTH);
-
-        // Center: Template Editor
-        JPanel editorPanel = new JPanel(new GridBagLayout());
-        editorPanel.setOpaque(false);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.anchor = GridBagConstraints.WEST;
-
-        JLabel title = new JLabel("Edit Message Template");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        title.setForeground(DARK_NAVY);
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
-        editorPanel.add(title, gbc);
-
-        gbc.gridwidth = 1;
-        gbc.gridy++; gbc.gridx = 0; editorPanel.add(new JLabel("Subject (for Email):"), gbc);
-        gbc.gridx = 1; templateSubjectField = new JTextField(30); editorPanel.add(templateSubjectField, gbc);
-
-        gbc.gridy++; gbc.gridx = 0; editorPanel.add(new JLabel("Type:"), gbc);
-        gbc.gridx = 1; templateTypeComboBox = new JComboBox<>(new String[]{"EMAIL", "SMS"}); templateTypeComboBox.setEnabled(false); editorPanel.add(templateTypeComboBox, gbc);
-
-        gbc.gridy++; gbc.gridx = 0; editorPanel.add(new JLabel("Body:"), gbc);
-        gbc.gridx = 1;
-        templateBodyArea = new JTextArea(10, 30);
-        templateBodyArea.setLineWrap(true);
-        templateBodyArea.setWrapStyleWord(true);
-        JScrollPane bodyScrollPane = new JScrollPane(templateBodyArea);
-        gbc.weightx = 1.0; 
-        gbc.weighty = 1.0; 
-        gbc.fill = GridBagConstraints.BOTH; 
-        editorPanel.add(bodyScrollPane, gbc);
-
-        // Buttons
-        gbc.gridy++; gbc.gridx = 0; gbc.gridwidth = 1;
-        gbc.weighty = 0; 
-        gbc.fill = GridBagConstraints.HORIZONTAL; 
-        updateTemplateButton = createStyledButton("Update Template", new Color(0, 123, 255));
-        updateTemplateButton.addActionListener(e -> updateMessageTemplate());
-        updateTemplateButton.setEnabled(false);
-        editorPanel.add(updateTemplateButton, gbc);
-
-        gbc.gridx = 1; 
-        deleteTemplateButton = createStyledButton("Delete Template", new Color(220, 53, 69)); 
-        deleteTemplateButton.addActionListener(e -> deleteMessageTemplate());
-        deleteTemplateButton.setEnabled(false);
-        editorPanel.add(deleteTemplateButton, gbc);
-
-        panel.add(editorPanel, BorderLayout.CENTER);
-
-        loadMessageTemplates();
-        return panel;
-    }
-
-    private void loadMessageTemplates() {
-        messageTemplatesTableModel.setRowCount(0);
-        List<MessageTemplate> templates = communicationManager.getAllMessageTemplates();
-        for (MessageTemplate template : templates) {
-            messageTemplatesTableModel.addRow(new Object[]{
-                template.getId(),
-                template.getTemplateName(),
-                template.getType(),
-                template.getSubject() != null ? template.getSubject() : "N/A"
-            });
-        }
-    }
-
-    private void loadSelectedTemplateDetails() {
-        int selectedRow = messageTemplatesTable.getSelectedRow();
-        if (selectedRow != -1) {
-            int templateId = (int) messageTemplatesTable.getValueAt(selectedRow, 0);
-            List<MessageTemplate> allTemplates = communicationManager.getAllMessageTemplates();
-            selectedTemplate = allTemplates.stream().filter(t -> t.getId() == templateId).findFirst().orElse(null);
-
-            if (selectedTemplate != null) {
-                templateSubjectField.setText(selectedTemplate.getSubject());
-                templateBodyArea.setText(selectedTemplate.getBody());
-                templateTypeComboBox.setSelectedItem(selectedTemplate.getType());
-                updateTemplateButton.setEnabled(true);
-                deleteTemplateButton.setEnabled(true); 
-            }
-        } else {
-            clearTemplateForm();
-        }
-    }
-
-    private void clearTemplateForm() {
-        selectedTemplate = null;
-        templateSubjectField.setText("");
-        templateBodyArea.setText("");
-        templateTypeComboBox.setSelectedIndex(0);
-        updateTemplateButton.setEnabled(false);
-        deleteTemplateButton.setEnabled(false); 
-    }
-
-    private void updateMessageTemplate() {
-        if (selectedTemplate == null) {
-            JOptionPane.showMessageDialog(this, "Please select a template to update.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        selectedTemplate.setSubject(templateSubjectField.getText().trim());
-        selectedTemplate.setBody(templateBodyArea.getText().trim());
-
-        if (communicationManager.updateMessageTemplate(selectedTemplate)) {
-            JOptionPane.showMessageDialog(this, "Message template updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-            loadMessageTemplates();
-            clearTemplateForm();
-        } else {
-            JOptionPane.showMessageDialog(this, "Failed to update message template.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void deleteMessageTemplate() {
-        if (selectedTemplate == null) {
-            JOptionPane.showMessageDialog(this, "Please select a template to delete.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete template '" + selectedTemplate.getTemplateName() + "'?", "Confirm Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (confirm == JOptionPane.YES_OPTION) {
-            if (Database.deleteMessageTemplate(selectedTemplate.getId())) { 
-                JOptionPane.showMessageDialog(this, "Message template deleted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-                loadMessageTemplates();
-                clearTemplateForm();
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to delete message template.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-
-    private JPanel createMessageLogsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setOpaque(false);
-
-        JLabel title = new JLabel("Message Delivery Logs");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        title.setForeground(DARK_NAVY);
-        title.setBorder(new EmptyBorder(0, 0, 10, 0));
-        panel.add(title, BorderLayout.NORTH);
-
-        String[] logColumnNames = {"ID", "Timestamp", "Recipient", "Type", "Subject", "Status", "Details"};
-        messageLogTableModel = new DefaultTableModel(logColumnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
-        };
-        messageLogTable = new JTable(messageLogTableModel);
-        messageLogTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        messageLogTable.setRowHeight(20);
-        messageLogTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
-        // Hide ID column
-        TableColumn idColumn = messageLogTable.getColumnModel().getColumn(0);
-        idColumn.setMinWidth(0); idColumn.setMaxWidth(0); idColumn.setPreferredWidth(0); idColumn.setResizable(false);
-
-        panel.add(new JScrollPane(messageLogTable), BorderLayout.CENTER);
-
-        loadMessageLogs();
-        return panel;
-    }
-
-    private void loadMessageLogs() {
-        messageLogTableModel.setRowCount(0);
-        List<MessageLog> logs = communicationManager.getAllMessageLogs();
-        for (MessageLog log : logs) {
-            messageLogTableModel.addRow(new Object[]{
-                log.getId(),
-                log.getTimestamp().format(TABLE_DATE_FORMATTER),
-                log.getRecipient(),
-                log.getMessageType(),
-                log.getSubject() != null ? log.getSubject() : "N/A",
-                log.getStatus(),
-                log.getDetails() != null ? log.getDetails() : "N/A"
-            });
-        }
-    }
-
-    // --- Tab 7: Central DB Configuration (Existing, moved to tab) ---
-    private JPanel createCentralDbConfigPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(Color.WHITE); 
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.anchor = GridBagConstraints.NORTHWEST;
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.gridwidth = 2;
-
-        JLabel dbConfigTitle = new JLabel("Central Database Configuration:");
-        dbConfigTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        dbConfigTitle.setForeground(DARK_NAVY);
-        panel.add(dbConfigTitle, gbc);
-
-        gbc.gridy++;
-        panel.add(new JLabel("Current Configured URL:"), gbc);
-        gbc.gridy++;
-        currentConfiguredUrlLabel = new JLabel("N/A");
-        currentConfiguredUrlLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        panel.add(currentConfiguredUrlLabel, gbc);
-
-        gbc.gridy++;
-        panel.add(new JLabel("New Central DB URL (JDBC format):"), gbc);
-        gbc.gridy++;
-        centralDbUrlInputField = new JTextField(50); // Now using the dedicated field
-        centralDbUrlInputField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        centralDbUrlInputField.putClientProperty("JTextField.placeholderText", "e.g., jdbc:postgresql://host:port/database?user=u&password=p");
-        panel.add(centralDbUrlInputField, gbc);
-
-        gbc.gridy++;
-        JPanel dbButtonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        dbButtonsPanel.setOpaque(false);
-
-        saveDbConfigButton = createStyledButton("Save Configuration", new Color(40, 167, 69)); 
-        saveDbConfigButton.addActionListener(e -> saveCentralDbConfig());
-        dbButtonsPanel.add(saveDbConfigButton);
-
-        testDbConnectionButton = createStyledButton("Test Connection", new Color(0, 123, 255)); 
-        testDbConnectionButton.addActionListener(e -> testCentralDbConnection());
-        dbButtonsPanel.add(testDbConnectionButton);
-
-        clearDbConfigButton = createStyledButton("Clear Configuration", new Color(255, 165, 0)); 
-        clearDbConfigButton.addActionListener(e -> clearCentralDbConfig());
-        dbButtonsPanel.add(clearDbConfigButton);
-
-        panel.add(dbButtonsPanel, gbc);
-
-        gbc.gridy++;
-        JLabel restartNote = new JLabel("<html><i>Note: Application restart is required for new database configurations to take effect.</i></html>");
-        restartNote.setFont(new Font("Segoe UI", Font.ITALIC, 12));
-        restartNote.setForeground(Color.GRAY);
-        panel.add(restartNote, gbc);
-
-        gbc.gridy++;
-        gbc.weighty = 1.0; 
-        panel.add(Box.createVerticalGlue(), gbc);
-
-        updateCentralDbUrlDisplay();
-        return panel;
-    }
-
-    private void updateCentralDbUrlDisplay() {
-        String currentUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY);
-        if (currentUrl != null && !currentUrl.trim().isEmpty()) {
-            currentConfiguredUrlLabel.setText(currentUrl);
-            centralDbUrlInputField.setText(currentUrl); 
-        } else {
-            currentConfiguredUrlLabel.setText("Not configured (using local SQLite)");
-            centralDbUrlInputField.setText("");
-        }
-    }
-
-    private void saveCentralDbConfig() {
-        String newUrl = centralDbUrlInputField.getText().trim();
-        String oldUrl = AppConfig.getProperty(AppConfig.CENTRAL_DB_URL_KEY, "");
-
-        if (newUrl.isEmpty()) {
-            int confirm = JOptionPane.showConfirmDialog(this, "The URL field is empty. This will clear the central database configuration and the app will use local SQLite. Continue?", "Confirm Clear Configuration", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (confirm == JOptionPane.YES_OPTION) {
-                AppConfig.removeProperty(AppConfig.CENTRAL_DB_URL_KEY);
-                logMessage("Central DB URL configuration cleared.");
-                
-                int confirmRestart = JOptionPane.showConfirmDialog(this, 
-                    "Central database configuration cleared. Restart the application for changes to take effect. Restart now?", 
-                    "Restart Application", 
-                    JOptionPane.YES_NO_OPTION, 
-                    JOptionPane.QUESTION_MESSAGE);
-
-                if (confirmRestart == JOptionPane.YES_OPTION) {
-                    System.exit(0); // This will trigger the shutdown hook and restart the app
-                }
-            } else {
-                return; 
-            }
-        } else {
-            AppConfig.setProperty(AppConfig.CENTRAL_DB_URL_KEY, newUrl);
-            logMessage("Central DB URL configuration saved: " + newUrl);
-            
-            // Prompt for restart if the URL actually changed
-            if (!oldUrl.equals(newUrl)) {
-                int confirmRestart = JOptionPane.showConfirmDialog(this, 
-                    "Central database URL saved. For these changes to take full effect, the application needs to restart. Restart now?", 
-                    "Restart Application", 
-                    JOptionPane.YES_NO_OPTION, 
-                    JOptionPane.QUESTION_MESSAGE);
-
-                if (confirmRestart == JOptionPane.YES_OPTION) {
-                    System.exit(0); // This will trigger the shutdown hook and restart the app
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Central database URL saved. No restart needed as URL did not change.", "Configuration Saved", JOptionPane.INFORMATION_MESSAGE);
-            }
-        }
-        updateCentralDbUrlDisplay();
-    }
-
-    private void testCentralDbConnection() {
-        String testUrl = centralDbUrlInputField.getText().trim();
-        if (testUrl.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please enter a URL to test.", "Input Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        logMessage("Testing connection to: " + testUrl);
-        boolean connected = Database.testConnection(testUrl);
-
-        if (connected) {
-            JOptionPane.showMessageDialog(this, "Connection successful!", "Test Result", JOptionPane.INFORMATION_MESSAGE);
-            logMessage("Connection test successful.");
-        } else {
-            JOptionPane.showMessageDialog(this, "Connection failed. Please check the URL and ensure the database is accessible.", "Test Result", JOptionPane.ERROR_MESSAGE);
-            logMessage("Connection test failed.");
-        }
-    }
-
-    private void clearCentralDbConfig() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to clear the central database configuration? The application will use local SQLite on next restart.", "Confirm Clear", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (confirm == JOptionPane.YES_OPTION) {
-            AppConfig.removeProperty(AppConfig.CENTRAL_DB_URL_KEY);
-            logMessage("Central DB URL configuration cleared.");
-            
-            // Prompt for restart after clearing
-            int confirmRestart = JOptionPane.showConfirmDialog(this, 
-                "Central database configuration cleared. For these changes to take full effect, the application needs to restart. Restart now?", 
-                "Restart Application", 
-                JOptionPane.YES_NO_OPTION, 
-                JOptionPane.QUESTION_MESSAGE);
-
-            if (confirmRestart == JOptionPane.YES_OPTION) {
-                System.exit(0); // This will trigger the shutdown hook and restart the app
-            }
-        }
-        updateCentralDbUrlDisplay();
-    }
-
     // --- Tab 8: Data Export/Import (Existing, moved to tab) ---
     private JPanel createDataExportImportPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
@@ -1384,7 +868,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         gbc.gridy++;
         gbc.weighty = 1.0; 
         gbc.fill = GridBagConstraints.BOTH;
-        syncLogArea = new JTextArea(15, 60);
+        syncLogArea = new JTextArea(); 
         syncLogArea.setEditable(false);
         syncLogArea.setLineWrap(true);
         syncLogArea.setWrapStyleWord(true);
@@ -1413,7 +897,7 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
             JOptionPane.showMessageDialog(this, "Data export simulated successfully to " + fileToSave.getName() + "!", "Export Success", JOptionPane.INFORMATION_MESSAGE);
             logMessage("Data export completed.");
         } else {
-            logMessage("Data export cancelled.");
+            logMessage("Data import cancelled.");
         }
     }
 
@@ -1440,14 +924,30 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
 
     private void viewAppInstances() {
         logMessage("Attempting to view app instances...");
-        String instancesInfo = "Currently, DocLink operates with local SQLite databases.\n" +
-                               "To 'sync' between instances, you would typically export data from one instance\n" +
-                               "and import it into another. Future enhancements could involve:\n" +
-                               "- A central server for shared data.\n" +
-                               "- Peer-to-peer data exchange mechanisms.\n" +
-                               "- Automated backup/restore points.";
-        JOptionPane.showMessageDialog(this, instancesInfo, "App Instances Overview", JOptionPane.INFORMATION_MESSAGE);
-        logMessage("App instances overview displayed.");
+        List<Peer> knownPeers = syncConfigManager.getKnownPeers();
+        StringBuilder instancesInfo = new StringBuilder();
+
+        if (knownPeers.isEmpty()) {
+            instancesInfo.append("No other DocLink instances (peers) are currently known.\n");
+            instancesInfo.append("You can use the 'Discover Peers' button in the 'Peer Management' tab in Sync Settings to find instances on your local network, or add them manually.");
+        } else {
+            instancesInfo.append("Known DocLink Instances (Peers):\n\n");
+            for (Peer peer : knownPeers) {
+                instancesInfo.append(String.format("  - IP: %s, Port: %d, Status: %s, Trusted: %b\n",
+                    peer.getIpAddress(), peer.getPort(), peer.getStatus(), peer.isTrusted()));
+            }
+            instancesInfo.append("\nNote: 'Status' indicates the last known connection state. For real-time status, a continuous heartbeat is needed.");
+        }
+
+        JTextArea textArea = new JTextArea(instancesInfo.toString());
+        textArea.setEditable(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(500, 300));
+
+        JOptionPane.showMessageDialog(this, scrollPane, "Known DocLink Instances", JOptionPane.PLAIN_MESSAGE);
+        logMessage("Known app instances overview displayed.");
     }
 
     @Override
@@ -1462,16 +962,17 @@ public class DeveloperPanel extends JPanel implements Dashboard.Refreshable {
         cardsPanel.updateCard(2, "Message Templates", messageTemplates, new Color(40, 167, 69)); 
 
         logMessage("Developer Panel data refreshed.");
-        updateCentralDbUrlDisplay(); 
 
         // Refresh data for all sub-panels
         loadSyncConfig();
         loadPeerData();
         loadSyncSettings();
         loadSystemUpdateLog(); 
-        loadCommunicationSettings();
-        loadMessageTemplates();
-        loadMessageLogs();
         clearBroadcastForm(); 
+
+        // NEW: Call refreshData on common panels
+        liveSyncMonitorPanel.refreshData();
+        communicationSettingsPanel.refreshData();
+        centralDbConfigPanel.refreshData();
     }
 }

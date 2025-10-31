@@ -1,7 +1,7 @@
 package doclink.ui.panels.director;
 
 import doclink.ApprovalCertificateGenerator;
-import doclink.Database; // Added import
+import doclink.Database;
 import doclink.DirectorDecisionLetterGenerator;
 import doclink.models.Log;
 import doclink.models.Plan;
@@ -10,10 +10,11 @@ import doclink.models.Document;
 import doclink.ui.Dashboard;
 import doclink.ui.DashboardCardsPanel;
 import doclink.ui.DashboardTablePanel;
+import doclink.communication.CommunicationManager; // NEW: Import CommunicationManager
 
 import javax.swing.*;
-import javax.swing.event.ListSelectionEvent; // Added import
-import javax.swing.event.ListSelectionListener; // Added import
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -33,12 +34,14 @@ public class DirectorReviewPanel extends JPanel implements Dashboard.Refreshable
     private JButton approveStructuralButton, approveNoStructuralButton, notRecommendButton, deferButton, viewDocumentsButton;
 
     private Plan selectedPlan;
+    private CommunicationManager communicationManager; // NEW: Instance of CommunicationManager
     private static final Color DARK_NAVY = new Color(26, 35, 126); // Define DARK_NAVY
 
     public DirectorReviewPanel(User user, Dashboard parentDashboard, DashboardCardsPanel cardsPanel) {
         this.currentUser = user;
         this.parentDashboard = parentDashboard;
         this.cardsPanel = cardsPanel;
+        this.communicationManager = new CommunicationManager(message -> System.out.println("[DirectorReviewPanel] " + message)); // NEW: Initialize CommunicationManager
         setLayout(new BorderLayout());
         setBackground(new Color(245, 247, 250)); // Reverted to light grey
 
@@ -228,6 +231,10 @@ public class DirectorReviewPanel extends JPanel implements Dashboard.Refreshable
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Reception", "Approved by Director for Structural", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan approved and forwarded to Reception for Structural Section routing.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Reception about plan approved for structural review
+        communicationManager.notifyByRole("Reception", "Reception_PlanApprovedForStructural_Email", communicationManager.createPlanUserReplacements(selectedPlan, null)); // Assuming a template exists
+
         clearDetails();
         refreshData();
     }
@@ -254,6 +261,17 @@ public class DirectorReviewPanel extends JPanel implements Dashboard.Refreshable
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Reception", "Approved (No Structural Review)", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan approved (no structural review) and forwarded to Reception for client pickup.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Reception about plan approved for client pickup
+        communicationManager.notifyByRole("Reception", "Reception_PlanApprovedForClientPickup_Email", communicationManager.createPlanUserReplacements(selectedPlan, null)); // Assuming a template exists
+        // NEW: Notify Client about plan approval
+        User clientUser = Database.getUserByEmail(selectedPlan.getContact());
+        if (clientUser != null) {
+            communicationManager.notifyUser(clientUser, selectedPlan, "Client_ApplicationApproved_Email");
+        } else {
+            System.err.println("Client user not found for notification: " + selectedPlan.getContact());
+        }
+
         clearDetails();
         refreshData();
     }
@@ -284,6 +302,12 @@ public class DirectorReviewPanel extends JPanel implements Dashboard.Refreshable
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Not Recommended by Director", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan not recommended and returned to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Planning about rejected plan
+        List<String[]> replacements = communicationManager.createPlanUserReplacements(selectedPlan, null);
+        replacements.add(new String[]{"fromRole", currentUser.getRole()}); // Add the role that rejected it
+        communicationManager.notifyByRole("Planning", "Planning_PlanRejected_Email", replacements);
+
         clearDetails();
         refreshData();
     }
@@ -314,6 +338,12 @@ public class DirectorReviewPanel extends JPanel implements Dashboard.Refreshable
         Database.addLog(new Log(selectedPlan.getId(), currentUser.getRole(), "Planning", "Deferred by Director", remarks));
 
         JOptionPane.showMessageDialog(this, "Plan deferred and returned to Planning Department.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        
+        // NEW: Notify Planning about deferred plan
+        List<String[]> replacements = communicationManager.createPlanUserReplacements(selectedPlan, null);
+        replacements.add(new String[]{"fromRole", currentUser.getRole()}); // Add the role that deferred it
+        communicationManager.notifyByRole("Planning", "Planning_PlanDeferred_Email", replacements);
+
         clearDetails();
         refreshData();
     }
@@ -356,9 +386,6 @@ public class DirectorReviewPanel extends JPanel implements Dashboard.Refreshable
         remarksArea.setText("");
         approveStructuralButton.setEnabled(false);
         approveNoStructuralButton.setEnabled(false);
-        notRecommendButton.setEnabled(false);
-        deferButton.setEnabled(false);
-        viewDocumentsButton.setEnabled(false);
     }
 
     @Override
